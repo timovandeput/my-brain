@@ -53,6 +53,11 @@ class BrainConfig {
     '.claude/**',
     '.trash/**',
     'node_modules/**',
+    // The agent's own instructions are not notes. Left in, they outrank real
+    // notes on any query about the vault itself, and `similar` matches them
+    // against everything because they are long and topic-general.
+    'AGENTS.md',
+    'CLAUDE.md',
   ];
 
   static const Map<String, double> defaultFieldWeights = {

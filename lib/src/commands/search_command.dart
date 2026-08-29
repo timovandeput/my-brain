@@ -8,6 +8,7 @@ import '../cli/vault_context.dart';
 import '../index/bm25.dart';
 import '../model.dart';
 import '../text/tokenizer.dart';
+import '../vault/frontmatter.dart';
 
 /// Full-text BM25 search over the vault.
 class SearchCommand extends Command<int> {
@@ -162,6 +163,10 @@ SearchQuery buildSearchQuery({
 /// Reads each hit's source file and attaches a body snippet around the first
 /// matched term. Only reads the files for the returned hits, so this costs
 /// `limit` file reads - never a full-vault scan.
+///
+/// The frontmatter is stripped before the window is cut. A snippet is there to
+/// show the reader why a note matched, and a window that opens mid-YAML shows
+/// them `status: developing ---` instead of the sentence that matched.
 Future<List<SearchHit>> attachSnippets(
   VaultContext ctx,
   List<SearchHit> hits, {
@@ -174,7 +179,8 @@ Future<List<SearchHit>> attachSnippets(
     String? snippet;
     if (file.existsSync()) {
       final text = await file.readAsString();
-      snippet = extractSnippet(text, hit.matchedTerms);
+      final body = text.substring(parseFrontmatter(text).bodyOffset);
+      snippet = extractSnippet(body, hit.matchedTerms);
     }
     result.add(hit.withSnippet(snippet));
   }
