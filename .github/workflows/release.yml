@@ -1,0 +1,67 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get
+      - run: dart run tool/gen_templates.dart
+      - run: dart analyze --fatal-infos
+      - run: dart test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-arm64
+            artifact: my-brain
+          - os: ubuntu-latest
+            target: linux-x64
+            artifact: my-brain
+          - os: windows-latest
+            target: windows-x64
+            artifact: my-brain.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get
+      - run: dart run tool/gen_templates.dart
+      # dart compile exe targets the host only, which is why this is a matrix.
+      - run: dart compile exe bin/my_brain.dart -o build/${{ matrix.artifact }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: my-brain-${{ matrix.target }}
+          path: build/${{ matrix.artifact }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Package per platform
+        run: |
+          cd dist
+          for d in */; do
+            name="${d%/}"
+            tar -czf "../$name.tar.gz" -C "$d" .
+          done
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.tar.gz'
