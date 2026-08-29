@@ -22,9 +22,19 @@ class ParsedNote {
   /// Every wikilink and embed outside code spans, in document order.
   final List<WikiLink> wikiLinks;
 
-  /// Targets of inline `[text](target)` links that point at notes: relative
-  /// paths only, never `http:`, `https:` or other schemes.
-  final List<String> markdownLinks;
+  /// Every inline `[text](target)` link that points at a note, with offsets.
+  ///
+  /// Excludes `http:`/`https:`/other-scheme targets, protocol-relative and
+  /// pure-fragment targets, image embeds (`![alt](src)`, never a note edge),
+  /// and targets with a non-markdown extension (attachments, e.g. images or
+  /// PDFs) - only an extensionless target or one ending in `.md`/`.markdown`
+  /// counts as pointing at a note.
+  final List<MarkdownLink> markdownLinkSpans;
+
+  /// Targets of [markdownLinkSpans], in document order. Kept for callers that
+  /// only need the target strings, not the offsets.
+  List<String> get markdownLinks =>
+      [for (final l in markdownLinkSpans) l.target];
 
   /// Inline hashtags found outside code spans, marker stripped, lowercased.
   final List<String> inlineTags;
@@ -39,7 +49,7 @@ class ParsedNote {
     required this.aliases,
     required this.headings,
     required this.wikiLinks,
-    required this.markdownLinks,
+    required this.markdownLinkSpans,
     required this.inlineTags,
     required this.wordCount,
   });
@@ -53,12 +63,48 @@ class Span {
   bool contains(int offset) => offset >= start && offset < end;
 }
 
+/// An inline `[text](target)` occurrence in a note body that points at a note
+/// (see [ParsedNote.markdownLinkSpans]).
+class MarkdownLink {
+  /// Target as resolved: percent-decoded, title/whitespace/angle-brackets
+  /// stripped.
+  final String target;
+
+  /// Character offset of the opening `[` in the source.
+  final int start;
+
+  /// Character offset just past the closing `)`.
+  final int end;
+
+  /// Offsets of the link's display text, i.e. the `text` in `[text](...)`,
+  /// used to replace the whole link with plain text on delete.
+  final int textStart;
+  final int textEnd;
+
+  /// Offsets of the raw target substring inside the parens - excludes any
+  /// optional title and surrounding `<...>` - used to rewrite just the target
+  /// on rename while preserving everything else about the link as written.
+  final int targetStart;
+  final int targetEnd;
+
+  const MarkdownLink({
+    required this.target,
+    required this.start,
+    required this.end,
+    required this.textStart,
+    required this.textEnd,
+    required this.targetStart,
+    required this.targetEnd,
+  });
+}
+
 /// Parses one note.
 ///
 /// [filename] is used only for the fallback title (its stem). Fenced code
-/// blocks and inline code spans are excluded from link, tag and heading
-/// detection: a wikilink inside a code sample is documentation, not a graph
-/// edge, and rewriting it during a rename would corrupt the sample.
+/// blocks, indented code blocks and inline code spans are excluded from
+/// link, tag and heading detection: a wikilink inside a code sample is
+/// documentation, not a graph edge, and rewriting it during a rename would
+/// corrupt the sample.
 ParsedNote parseNote(String source, {required String filename}) {
   final frontmatter = parseFrontmatter(source);
   final body = source.substring(frontmatter.bodyOffset);
@@ -82,57 +128,112 @@ ParsedNote parseNote(String source, {required String filename}) {
     aliases: _extractAliases(frontmatter.data),
     headings: headings,
     wikiLinks: _extractWikiLinks(body, spans),
-    markdownLinks: _extractMarkdownLinks(body, spans),
+    markdownLinkSpans: _extractMarkdownLinkSpans(body, spans),
     inlineTags: _extractInlineTags(body, spans),
     wordCount: _wordCount(body),
   );
 }
 
-/// Character ranges of fenced blocks and inline code spans in [body].
+/// Character ranges of fenced blocks, indented code blocks and inline code
+/// spans in [body].
+///
+/// An indented block is a line indented 4+ spaces, not a list-item
+/// continuation, preceded by a blank line; it runs through further blank and
+/// 4+-space-indented lines and ends at the first non-blank line indented
+/// less than that (CommonMark's rule, with list-continuation handling
+/// simplified to "was a list marker seen since the last dedent").
 ///
 /// Exposed because the link rewriter needs the same exclusion rule as the
 /// parser; the two must never disagree about what counts as code.
 List<Span> codeSpans(String body) {
   final lines = _mdLines(body).toList();
-  final fenced = <Span>[];
+  final blockSpans = <Span>[];
   final fenceOpen = RegExp(r'^ {0,3}(`{3,}|~{3,})');
+
+  // Tracks whether the most recently *processed* line looked like a list
+  // item (or blank content belonging to one), so a 4-space-indented line
+  // that is really list-item continuation is not mistaken for an indented
+  // code block - only a genuinely dedented block start should count.
+  var insideList = false;
+  // Whether the most recently processed line was blank: an indented code
+  // block may only start right after one (it cannot interrupt a paragraph).
+  var prevBlank = true;
 
   var i = 0;
   while (i < lines.length) {
     final line = lines[i];
-    final m = fenceOpen.firstMatch(line.content);
-    if (m == null) {
-      i++;
+    final content = line.content;
+    final isBlank = content.trim().isEmpty;
+
+    final fenceMatch = fenceOpen.firstMatch(content);
+    if (fenceMatch != null) {
+      final fence = fenceMatch.group(1)!;
+      final fenceChar = fence[0];
+      final fenceLen = fence.length;
+      final blockStart = line.start;
+      var j = i + 1;
+      var blockEnd = body.length;
+      var closed = false;
+      while (j < lines.length) {
+        if (_isClosingFence(lines[j].content, fenceChar, fenceLen)) {
+          blockEnd = lines[j].end;
+          closed = true;
+          j++;
+          break;
+        }
+        j++;
+      }
+      if (!closed) {
+        blockEnd = body.length;
+        j = lines.length;
+      }
+      blockSpans.add(Span(blockStart, blockEnd));
+      i = j;
+      prevBlank = false;
       continue;
     }
-    final fence = m.group(1)!;
-    final fenceChar = fence[0];
-    final fenceLen = fence.length;
-    final blockStart = line.start;
-    var j = i + 1;
-    var blockEnd = body.length;
-    var closed = false;
-    while (j < lines.length) {
-      if (_isClosingFence(lines[j].content, fenceChar, fenceLen)) {
-        blockEnd = lines[j].end;
-        closed = true;
-        j++;
+
+    final indent = _leadingSpaces.firstMatch(content)!.group(0)!.length;
+    if (!isBlank && indent >= 4 && prevBlank && !insideList) {
+      // An indented code block: runs through blank lines and further
+      // 4+-space-indented lines, and ends at the first non-blank line
+      // indented less than that.
+      final blockStart = line.start;
+      var blockEnd = line.end;
+      var j = i + 1;
+      while (j < lines.length) {
+        final l = lines[j];
+        final lBlank = l.content.trim().isEmpty;
+        final lIndent = _leadingSpaces.firstMatch(l.content)!.group(0)!.length;
+        if (lBlank || lIndent >= 4) {
+          blockEnd = l.end;
+          j++;
+          continue;
+        }
         break;
       }
-      j++;
+      blockSpans.add(Span(blockStart, blockEnd));
+      i = j;
+      prevBlank = false;
+      continue;
     }
-    if (!closed) {
-      blockEnd = body.length;
-      j = lines.length;
+
+    if (_listMarker.hasMatch(content)) {
+      insideList = true;
+    } else if (!isBlank && indent < 4) {
+      insideList = false;
     }
-    fenced.add(Span(blockStart, blockEnd));
-    i = j;
+    prevBlank = isBlank;
+    i++;
   }
 
-  final spans = <Span>[...fenced, ..._inlineCodeSpans(body, fenced)];
+  final spans = <Span>[...blockSpans, ..._inlineCodeSpans(body, blockSpans)];
   spans.sort((Span a, Span b) => a.start.compareTo(b.start));
   return spans;
 }
+
+final RegExp _leadingSpaces = RegExp(r'^ *');
+final RegExp _listMarker = RegExp(r'^ {0,3}(?:[-*+]|\d{1,9}[.)]) +\S');
 
 bool _isClosingFence(String content, String fenceChar, int fenceLen) {
   final pattern = RegExp(
@@ -144,7 +245,8 @@ bool _isClosingFence(String content, String fenceChar, int fenceLen) {
 final RegExp _backtickRun = RegExp('`+');
 
 List<Span> _inlineCodeSpans(String body, List<Span> fenced) {
-  final sortedFenced = [...fenced]..sort((Span a, Span b) => a.start.compareTo(b.start));
+  final sortedFenced = [...fenced]
+    ..sort((Span a, Span b) => a.start.compareTo(b.start));
   final spans = <Span>[];
   var pos = 0;
   for (final f in sortedFenced) {
@@ -291,43 +393,103 @@ List<WikiLink> _extractWikiLinks(String body, List<Span> spans) {
   return links;
 }
 
-final RegExp _mdLink = RegExp(r'\[([^\[\]]*)\]\(([^()]*)\)');
+// Optional leading `!` marks an image embed: never a note edge.
+final RegExp _mdLink = RegExp(r'(!)?\[([^\[\]]*)\]\(([^()]*)\)');
 final RegExp _uriScheme = RegExp(r'^[a-zA-Z][a-zA-Z0-9+.\-]*:');
+final RegExp _wsChar = RegExp(r'\s');
+const Set<String> _noteExtensions = {'.md', '.markdown'};
 
-List<String> _extractMarkdownLinks(String body, List<Span> spans) {
-  final links = <String>[];
+List<MarkdownLink> _extractMarkdownLinkSpans(String body, List<Span> spans) {
+  final links = <MarkdownLink>[];
   for (final m in _mdLink.allMatches(body)) {
     if (_inAnySpan(spans, m.start)) continue;
-    var raw = m.group(2)!.trim();
-    if (raw.isEmpty) continue;
+    if (m.group(1) != null) continue; // image embed, never a note edge.
 
-    // Strip an optional "title" or 'title' after the target.
-    final spaceIdx = raw.indexOf(RegExp(r'\s'));
-    if (spaceIdx > 0) {
-      final rest = raw.substring(spaceIdx).trim();
-      if (rest.startsWith('"') || rest.startsWith("'")) {
-        raw = raw.substring(0, spaceIdx);
-      }
-    }
+    // `Match` only exposes whole-match offsets, not per-group ones, so the
+    // group offsets are derived from the fixed literal characters the regex
+    // guarantees between them (`[`, `]`, `(`, `)`) plus each group's length.
+    final text = m.group(2)!;
+    final rawContent = m.group(3)!;
+    final textStart = m.start + 1; // just past the opening `[`.
+    final textEnd = textStart + text.length;
+    final parenStart = textEnd + 2; // past the `](`.
+    final parenEnd = parenStart + rawContent.length;
 
-    if (raw.length >= 2 && raw.startsWith('<') && raw.endsWith('>')) {
-      raw = raw.substring(1, raw.length - 1);
-    }
-    if (raw.isEmpty) continue;
+    final target = _parseLinkTarget(body, parenStart, parenEnd);
+    if (target == null) continue;
 
+    final raw = body.substring(target.start, target.end);
     if (_uriScheme.hasMatch(raw)) continue;
     if (raw.startsWith('//')) continue;
     if (raw.startsWith('#')) continue;
 
-    var target = raw;
+    var decoded = raw;
     try {
-      target = Uri.decodeComponent(raw);
+      decoded = Uri.decodeComponent(raw);
     } on FormatException {
       // Leave target as-is when it is not validly percent-encoded.
     }
-    links.add(target);
+
+    final ext = p.extension(decoded).toLowerCase();
+    if (ext.isNotEmpty && !_noteExtensions.contains(ext)) {
+      continue; // an attachment (image, pdf, ...), not a note edge.
+    }
+
+    links.add(MarkdownLink(
+      target: decoded,
+      start: m.start,
+      end: m.end,
+      textStart: textStart,
+      textEnd: textEnd,
+      targetStart: target.start,
+      targetEnd: target.end,
+    ));
   }
   return links;
+}
+
+/// Locates the raw target substring within a markdown link's `(...)` content
+/// - `[start, parenEnd)` from the regex - stripping surrounding whitespace,
+/// an optional `"title"`/`'title'`, and `<...>` wrapping, without altering
+/// the text in between. Returns null when nothing is left once punctuation is
+/// stripped (a same-file `()`  or an all-whitespace target).
+({int start, int end})? _parseLinkTarget(
+    String body, int parenStart, int parenEnd) {
+  var start = parenStart;
+  var end = parenEnd;
+  while (start < end && _wsChar.hasMatch(body[start])) {
+    start++;
+  }
+  while (end > start && _wsChar.hasMatch(body[end - 1])) {
+    end--;
+  }
+  if (start == end) return null;
+
+  var spaceIdx = -1;
+  for (var i = start; i < end; i++) {
+    if (_wsChar.hasMatch(body[i])) {
+      spaceIdx = i;
+      break;
+    }
+  }
+  if (spaceIdx > start) {
+    var rest = spaceIdx;
+    while (rest < end && _wsChar.hasMatch(body[rest])) {
+      rest++;
+    }
+    if (rest < end && (body[rest] == '"' || body[rest] == "'")) {
+      end = spaceIdx;
+    }
+  }
+  if (start == end) return null;
+
+  if (end - start >= 2 && body[start] == '<' && body[end - 1] == '>') {
+    start += 1;
+    end -= 1;
+  }
+  if (start == end) return null;
+
+  return (start: start, end: end);
 }
 
 // No leading `^`: used with matchAsPrefix at an arbitrary offset, where `^`

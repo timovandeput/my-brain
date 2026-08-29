@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../cli/vault_context.dart' show CliError;
 import '../config.dart';
 import '../model.dart';
 import '../vault/linkgraph.dart';
@@ -78,7 +79,7 @@ class LinkRewriter {
   ///
   /// [to] may be a bare name or a path; a missing `.md` extension is added.
   RewritePlan planRename(String from, String to) {
-    final target = _normalizeDestination(to);
+    final target = _normalizeDestination(from, to);
     return _plan(from: from, to: target);
   }
 
@@ -89,7 +90,10 @@ class LinkRewriter {
   RewritePlan _plan({required String from, required String? to}) {
     final resolver = LinkResolver(docs);
     if (!docs.any((DocRecord d) => d.path == from)) {
-      throw ArgumentError('not an indexed note: $from');
+      throw CliError(1, 'not an indexed note: $from');
+    }
+    if (to != null) {
+      _checkDestinationFree(from, to);
     }
 
     final edits = <LinkEdit>[];
@@ -97,17 +101,20 @@ class LinkRewriter {
 
     for (final doc in docs) {
       if (doc.path == from && to == null) continue;
-      final file = File(p.join(config.vaultRoot, p.joinAll(doc.path.split('/'))));
+      // Only look at files that actually point at the target, using the
+      // index's outLinks - not the file on disk, which may no longer exist.
+      // On a large vault this is also the difference between reading three
+      // files and reading all of them.
+      final pointsHere =
+          doc.outLinks.any((String t) => resolver.resolve(t)?.path == from);
+      if (!pointsHere) continue;
+
+      final file =
+          File(p.join(config.vaultRoot, p.joinAll(doc.path.split('/'))));
       if (!file.existsSync()) {
         unresolved[doc.path] = 'file no longer exists';
         continue;
       }
-      // Only re-read files that actually point at the target. On a large
-      // vault this is the difference between reading three files and reading
-      // all of them.
-      final pointsHere =
-          doc.outLinks.any((String t) => resolver.resolve(t)?.path == from);
-      if (!pointsHere) continue;
 
       final text = file.readAsStringSync();
       final note = parseNote(text, filename: p.basename(doc.path));
@@ -122,9 +129,27 @@ class LinkRewriter {
         final start = link.start + shift;
         final end = link.end + shift;
         final before = text.substring(start, end);
+        final after =
+            to == null ? _displayText(link) : _rewrittenLink(link, to);
+        if (before == after) continue;
+        edits.add(LinkEdit(
+          path: doc.path,
+          line: _lineOf(text, start),
+          before: before,
+          after: after,
+        ));
+      }
+
+      for (final link in note.markdownLinkSpans) {
+        if (link.target.isEmpty) continue;
+        if (resolver.resolve(link.target)?.path != from) continue;
+
+        final start = link.start + shift;
+        final end = link.end + shift;
+        final before = text.substring(start, end);
         final after = to == null
-            ? _displayText(link)
-            : _rewrittenLink(link, to);
+            ? _mdDisplayText(text, link, shift)
+            : _rewrittenMdLink(text, link, shift, to);
         if (before == after) continue;
         edits.add(LinkEdit(
           path: doc.path,
@@ -141,6 +166,19 @@ class LinkRewriter {
       edits: edits,
       unresolved: unresolved,
     );
+  }
+
+  /// Throws [CliError] when [to] already exists on disk and isn't just [from]
+  /// under a different spelling (a no-op rename).
+  void _checkDestinationFree(String from, String to) {
+    final sourceFile =
+        File(p.join(config.vaultRoot, p.joinAll(from.split('/'))));
+    final destination =
+        File(p.join(config.vaultRoot, p.joinAll(to.split('/'))));
+    if (destination.path == sourceFile.path) return;
+    if (destination.existsSync()) {
+      throw CliError(1, 'destination already exists: $to');
+    }
   }
 
   /// Applies a plan: rewrites referring files first, then moves or deletes the
@@ -178,6 +216,16 @@ class LinkRewriter {
           _Replacement(link.start + shift, link.end + shift, after),
         );
       }
+      for (final link in note.markdownLinkSpans) {
+        if (link.target.isEmpty) continue;
+        if (resolver.resolve(link.target)?.path != from) continue;
+        final after = plan.to == null
+            ? _mdDisplayText(text, link, shift)
+            : _rewrittenMdLink(text, link, shift, plan.to!);
+        replacements.add(
+          _Replacement(link.start + shift, link.end + shift, after),
+        );
+      }
       if (replacements.isEmpty) continue;
 
       // Rebuild the file in one forward pass, copying the text between
@@ -204,23 +252,28 @@ class LinkRewriter {
       if (sourceFile.existsSync()) await sourceFile.delete();
       return;
     }
+    // Re-check here too, not just in _plan: the plan may have been made
+    // before an earlier command in the same session (or another process)
+    // created this path.
+    _checkDestinationFree(from, to);
     final destination =
         File(p.join(config.vaultRoot, p.joinAll(to.split('/'))));
-    if (destination.path == sourceFile.path) return;
-    if (destination.existsSync()) {
-      throw ArgumentError('destination already exists: $to');
-    }
     await destination.parent.create(recursive: true);
     await sourceFile.rename(destination.path);
   }
 
-  /// Adds a `.md` extension when the destination omits it, and normalises
-  /// separators to the vault-relative `/` form.
-  String _normalizeDestination(String to) {
+  /// Adds a `.md` extension when the destination omits it, normalises
+  /// separators to the vault-relative `/` form, and - when [to] has no
+  /// directory component of its own - keeps [from]'s directory, matching how
+  /// Obsidian resolves a bare-name rename target.
+  String _normalizeDestination(String from, String to) {
     final normalized = p.split(to).join('/');
-    return normalized.toLowerCase().endsWith('.md')
+    final withExtension = normalized.toLowerCase().endsWith('.md')
         ? normalized
         : '$normalized.md';
+    if (withExtension.contains('/')) return withExtension;
+    final dir = p.dirname(from);
+    return dir == '.' ? withExtension : '$dir/$withExtension';
   }
 
   /// Rebuilds a wikilink pointing at [newPath], keeping the original's alias
@@ -246,6 +299,32 @@ class LinkRewriter {
   /// What a link should become once its target is gone: the text a reader was
   /// meant to see, so the sentence around it still reads.
   String _displayText(WikiLink link) => link.alias ?? link.target;
+
+  /// What a markdown link should become once its target is gone: just its
+  /// display text, dropping the `[...](...)` wrapper entirely.
+  String _mdDisplayText(String text, MarkdownLink link, int shift) =>
+      text.substring(link.textStart + shift, link.textEnd + shift);
+
+  /// Rebuilds a markdown link pointing at [newPath], replacing only the raw
+  /// target substring and leaving the `[text]` part, any optional title and
+  /// `<...>` wrapping exactly as written.
+  String _rewrittenMdLink(
+    String text,
+    MarkdownLink link,
+    int shift,
+    String newPath,
+  ) {
+    final start = link.start + shift;
+    final end = link.end + shift;
+    final targetStart = link.targetStart + shift;
+    final targetEnd = link.targetEnd + shift;
+    final originalTarget = text.substring(targetStart, targetEnd);
+    final newTarget =
+        originalTarget.contains('/') ? newPath : p.basename(newPath);
+    return text.substring(start, targetStart) +
+        newTarget +
+        text.substring(targetEnd, end);
+  }
 
   int _lineOf(String text, int offset) {
     var line = 1;

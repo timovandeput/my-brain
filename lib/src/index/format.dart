@@ -166,6 +166,78 @@ class IndexHeader {
       manifestHash: Uint8List.sublistView(bytes, 128, 128 + manifestHashBytes),
     );
   }
+
+  /// Checks that every region offset and count is consistent with the
+  /// others and fits inside a file of [fileLength] bytes.
+  ///
+  /// [fromBytes] only ever sees the header's own [indexHeaderSize] bytes, so
+  /// it cannot catch a header that describes regions extending past the end
+  /// of a truncated file, or a corrupt count so large that computing a
+  /// region's byte length would itself misbehave. This is a second pass,
+  /// run once the real file length is known, before any region is read.
+  ///
+  /// Regions are contiguous and ordered exactly as documented in this
+  /// library's doc comment: header, docLens, docOffs, docRecs, termOffsets,
+  /// termEntries, postings, attrOffsets, attrEntries. The fixed-width
+  /// regions (docLens, docOffs, termOffsets, attrOffsets) have offsets that
+  /// follow analytically from the counts, so those are checked for exact
+  /// equality; the variable-length regions (docRecs, termEntries, postings,
+  /// attrEntries) can only be checked for ordering and for fitting in the
+  /// file.
+  void validate(int fileLength) {
+    Never fail(String detail) {
+      throw IndexFormatException(
+        'index file is corrupt ($detail) - run `my-brain index`',
+      );
+    }
+
+    // Bound the counts against the file size before they are used in any
+    // arithmetic below. Each doc/term/attr needs at least one byte
+    // somewhere in the file, so a count larger than the file itself is
+    // already proof of corruption - and checking this first means the
+    // multiplications below (`4 * docCount`, `8 * termCount`, ...) can
+    // never run away with an implausible value from a garbage header.
+    if (docCount > fileLength) fail('docCount exceeds file size');
+    if (termCount > fileLength) fail('termCount exceeds file size');
+    if (attrCount > fileLength) fail('attrCount exceeds file size');
+
+    if (docLensOffset != indexHeaderSize) {
+      fail('docLensOffset does not follow the header');
+    }
+    if (docOffsOffset != docLensOffset + 4 * docCount) {
+      fail('docOffsOffset inconsistent with docCount');
+    }
+    if (docRecsOffset != docOffsOffset + 8 * docCount) {
+      fail('docRecsOffset inconsistent with docCount');
+    }
+    if (termEntriesOffset != termOffsetsOffset + 8 * termCount) {
+      fail('termEntriesOffset inconsistent with termCount');
+    }
+    if (attrEntriesOffset != attrOffsetsOffset + 8 * attrCount) {
+      fail('attrEntriesOffset inconsistent with attrCount');
+    }
+
+    // The variable-length regions can only be checked for monotonic
+    // ordering - their true lengths are only known by decoding them.
+    final regionsInOrder = [
+      docLensOffset,
+      docOffsOffset,
+      docRecsOffset,
+      termOffsetsOffset,
+      termEntriesOffset,
+      postingsOffset,
+      attrOffsetsOffset,
+      attrEntriesOffset,
+    ];
+    for (var i = 1; i < regionsInOrder.length; i++) {
+      if (regionsInOrder[i] < regionsInOrder[i - 1]) {
+        fail('region offsets are out of order');
+      }
+    }
+    if (attrEntriesOffset > fileLength) {
+      fail('index file is shorter than the header claims');
+    }
+  }
 }
 
 /// Raised when an index file is missing, truncated, or written by another build.

@@ -15,8 +15,14 @@ class RenameCommand extends Command<int> {
   final String invocation = 'my-brain rename <old> <new>';
 
   RenameCommand() {
-    argParser.addFlag('dry-run',
-        negatable: false, help: 'Show the plan without applying it.');
+    argParser
+      ..addFlag('dry-run',
+          negatable: false, help: 'Show the plan without applying it.')
+      ..addFlag('force',
+          negatable: false,
+          help: 'Proceed even if the index is stale. A note added or '
+              'changed since the last `my-brain index` will not have its '
+              'links rewritten.');
   }
 
   @override
@@ -32,6 +38,7 @@ class RenameCommand extends Command<int> {
     final oldArg = rest[0];
     final newArg = rest[1];
     final dryRun = argResults!['dry-run'] as bool;
+    final force = argResults!['force'] as bool;
 
     VaultContext ctx;
     try {
@@ -42,6 +49,18 @@ class RenameCommand extends Command<int> {
     }
 
     try {
+      // rename mutates files: a note missed by a stale index would have its
+      // links to the renamed note permanently orphaned rather than merely
+      // reported, so refuse outright instead of only warning.
+      final staleness = await ctx.checkStaleness();
+      if (staleness.stale && !force) {
+        output.error(
+          'index is stale (${staleness.summary}); run `my-brain index` '
+          'first, or pass --force to proceed anyway',
+        );
+        return 3;
+      }
+
       final reader = await ctx.openIndex();
       final docs = await reader.allDocs();
       final doc = await ctx.resolveNote(oldArg);
@@ -85,7 +104,12 @@ void emitRewritePlan(
       'fileCount': plan.fileCount,
       'edits': [
         for (final e in plan.edits)
-          {'path': e.path, 'line': e.line, 'before': e.before, 'after': e.after},
+          {
+            'path': e.path,
+            'line': e.line,
+            'before': e.before,
+            'after': e.after
+          },
       ],
       'unresolved': plan.unresolved,
     },

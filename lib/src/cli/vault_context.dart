@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../config.dart';
+import '../index/format.dart';
 import '../index/reader.dart';
 import '../model.dart';
 import '../vault/linkgraph.dart';
@@ -83,6 +84,13 @@ class VaultContext {
 
   /// Opens (and caches) the index reader. Throws [CliError] with exit code 3
   /// when `.brain/index.bin` is missing or unreadable.
+  ///
+  /// [IndexReader.open] is expected to turn every malformed-file case into
+  /// an [IndexFormatException], but a corrupt file is adversarial input by
+  /// nature: this also catches the [Error] types a bug in that validation
+  /// could still let through (out-of-range indexing, a bad allocation size,
+  /// ...) so a broken index is always a clean exit-3 error, never a stack
+  /// trace dumped to the user's terminal.
   Future<IndexReader> openIndex() async {
     final cached = _reader;
     if (cached != null) return cached;
@@ -93,8 +101,14 @@ class VaultContext {
       final reader = await IndexReader.open(config.indexPath);
       _reader = reader;
       return reader;
+    } on IndexFormatException catch (e) {
+      // Already an actionable message naming the problem and the fix; wrapping
+      // it again just nests the same instruction inside parentheses.
+      throw CliError(3, e.message);
     } on Exception catch (e) {
-      throw CliError(3, 'no index; run `my-brain index` ($e)');
+      throw CliError(3, 'could not read the index ($e); run `my-brain index`');
+    } on Error catch (e) {
+      throw CliError(3, 'could not read the index ($e); run `my-brain index`');
     }
   }
 

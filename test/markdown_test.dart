@@ -31,7 +31,8 @@ void main() {
       expect(body.substring(spans.first.end), 'after');
     });
 
-    test('nested/adjacent fences: a fence char run shorter than the '
+    test(
+        'nested/adjacent fences: a fence char run shorter than the '
         'opening does not close it', () {
       const body = '```\n``\nstill code\n```\nafter';
       final spans = codeSpans(body);
@@ -52,7 +53,8 @@ void main() {
       expect(body.substring(spans.first.start, spans.first.end), '`code here`');
     });
 
-    test('inline code span delimited by double backticks can contain a '
+    test(
+        'inline code span delimited by double backticks can contain a '
         'single backtick', () {
       const body = 'text ``code ` here`` more';
       final spans = codeSpans(body);
@@ -78,6 +80,51 @@ void main() {
       final starts = spans.map((Span s) => s.start).toList();
       final sortedStarts = [...starts]..sort();
       expect(starts, sortedStarts);
+    });
+
+    group('indented code blocks (bug 4)', () {
+      test('a 4-space-indented block preceded by a blank line is code', () {
+        const body = 'Some text.\n\n    code line one\n    code line two\n\n'
+            'After.';
+        final spans = codeSpans(body);
+        expect(spans, hasLength(1));
+        expect(
+          body.substring(spans.first.start, spans.first.end),
+          '    code line one\n    code line two\n\n',
+        );
+      });
+
+      test('ends at the first non-blank line indented less than 4 spaces', () {
+        const body = 'Text.\n\n    code\nback to prose.';
+        final spans = codeSpans(body);
+        expect(spans, hasLength(1));
+        expect(body.substring(spans.first.end), 'back to prose.');
+      });
+
+      test(
+          'not preceded by a blank line: does not start a block, so it '
+          'cannot interrupt a paragraph', () {
+        const body = 'A paragraph that runs on\n    with an indented '
+            'continuation line.';
+        final spans = codeSpans(body);
+        expect(spans, isEmpty);
+      });
+
+      test(
+          'an indented, blank-line-separated list continuation is not '
+          'treated as code', () {
+        const body = '- Item one\n\n'
+            '    Continuation paragraph with [[Real Link]].\n\n'
+            '- Item two\n';
+        final spans = codeSpans(body);
+        expect(spans, isEmpty);
+      });
+
+      test('3-space indentation is not enough to start a block', () {
+        const body = 'Text.\n\n   not quite indented enough.';
+        final spans = codeSpans(body);
+        expect(spans, isEmpty);
+      });
     });
   });
 
@@ -209,6 +256,28 @@ void main() {
       expect(note.wikiLinks, hasLength(1));
       expect(note.wikiLinks.first.target, 'Real Link');
     });
+
+    test('wikilink inside an indented code block is skipped (bug 4)', () {
+      const source = 'Real [[Real Link]].\n\n'
+          '    Fake [[Not A Link]] in an indented block.\n';
+      final note = parseNote(source, filename: 'x.md');
+      expect(note.wikiLinks, hasLength(1));
+      expect(note.wikiLinks.first.target, 'Real Link');
+    });
+  });
+
+  group('parseNote headings, hashtags in indented blocks (bug 4)', () {
+    test('a heading-like line inside an indented block is not a heading', () {
+      const source = 'Text.\n\n    # Not a heading\n\n# Real Heading\n';
+      final note = parseNote(source, filename: 'x.md');
+      expect(note.headings, ['Real Heading']);
+    });
+
+    test('a hashtag inside an indented block is not a tag', () {
+      const source = 'Text.\n\n    #not-a-tag\n\n#real-tag\n';
+      final note = parseNote(source, filename: 'x.md');
+      expect(note.inlineTags, ['real-tag']);
+    });
   });
 
   group('parseNote markdownLinks', () {
@@ -258,6 +327,44 @@ void main() {
       const source = 'Some `[a](b.md)` and [c](d.md).';
       final note = parseNote(source, filename: 'x.md');
       expect(note.markdownLinks, ['d.md']);
+    });
+
+    group('attachments are not note edges (bug 5)', () {
+      test('an image link to a .png is excluded', () {
+        const source = '[diagram](../assets/diagram.png)';
+        final note = parseNote(source, filename: 'x.md');
+        expect(note.markdownLinks, isEmpty);
+      });
+
+      test('a link to a .pdf is excluded', () {
+        const source = '[spec](../assets/spec.pdf)';
+        final note = parseNote(source, filename: 'x.md');
+        expect(note.markdownLinks, isEmpty);
+      });
+
+      test('an image embed is never a note edge, even pointing at a .md', () {
+        const source = '![embed](notes/other.md)';
+        final note = parseNote(source, filename: 'x.md');
+        expect(note.markdownLinks, isEmpty);
+      });
+
+      test('.md and .markdown targets still count as note edges', () {
+        const source = '[a](other.md) [b](other.markdown)';
+        final note = parseNote(source, filename: 'x.md');
+        expect(note.markdownLinks, ['other.md', 'other.markdown']);
+      });
+
+      test('an extensionless target still counts as a note edge', () {
+        const source = '[a](other-note)';
+        final note = parseNote(source, filename: 'x.md');
+        expect(note.markdownLinks, ['other-note']);
+      });
+
+      test('extension check is case-insensitive', () {
+        const source = '[a](OTHER.MD) [b](photo.PNG)';
+        final note = parseNote(source, filename: 'x.md');
+        expect(note.markdownLinks, ['OTHER.MD']);
+      });
     });
   });
 

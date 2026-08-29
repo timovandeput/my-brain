@@ -6,6 +6,9 @@ import 'package:my_brain/src/index/bm25.dart';
 import 'package:my_brain/src/index/builder.dart';
 import 'package:my_brain/src/index/reader.dart';
 import 'package:my_brain/src/model.dart';
+import 'package:my_brain/src/text/tokenizer.dart';
+import 'package:my_brain/src/vault/scanner.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
@@ -308,15 +311,108 @@ void main() {
 
     test('similarTo returns empty when the source file no longer exists',
         () async {
-      // similarTo's content-analysis path runs the shared Analyzer, which is
-      // being implemented in parallel and is out of scope/unavailable here
-      // (see task constraints) - so this only exercises the missing-file
-      // short-circuit, which is reachable without it. The synthetic docs in
-      // this suite were never written under vaultRoot, so the file genuinely
-      // does not exist.
+      // The synthetic docs in this suite were never written under
+      // vaultRoot, so the file genuinely does not exist; this exercises
+      // similarTo's missing-file short-circuit without needing real files
+      // on disk.
       final rec = await reader.doc(0);
       final hits = await searcher.similarTo(rec);
       expect(hits, isEmpty);
+    });
+  });
+
+  group('Searcher.similarTo on real files', () {
+    late Directory tempDir;
+    late BrainConfig config;
+    late IndexReader reader;
+    late Searcher searcher;
+
+    // Shared body content so notes/a.md, notes/b.md and notes/c.md are
+    // genuine near-duplicates: the same distinctive, indexed body terms.
+    const sharedBody = '''
+# Quarterly Roadmap
+
+The widget platform roadmap covers timeline milestones, budget approval,
+stakeholder signoff and deliverable tracking for the upcoming quarter.
+Engineering, design and product all review the roadmap before it ships.
+''';
+
+    setUp(() async {
+      tempDir =
+          Directory.systemTemp.createTempSync('my_brain_similar_test_');
+      config = BrainConfig(vaultRoot: tempDir.path);
+
+      // note-a.md carries a large frontmatter block - twenty keys whose
+      // values are nonsense words that appear nowhere else in the vault.
+      // Before the fix, analyzing the raw file source (frontmatter
+      // included) fed these zero-docFreq terms into similarTo's query
+      // budget; being unmatchable anywhere, they crowded out the shared
+      // body terms and the note showed up as having no similar notes.
+      final frontmatterLines = StringBuffer('---\n');
+      for (var i = 0; i < 20; i++) {
+        frontmatterLines.writeln('customfield$i: nonsenseval$i');
+      }
+      frontmatterLines.writeln('---');
+      File(p.join(tempDir.path, 'notes', 'note-a.md'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('$frontmatterLines\n$sharedBody');
+
+      File(p.join(tempDir.path, 'notes', 'note-b.md'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('---\nstatus: draft\n---\n\n$sharedBody');
+
+      File(p.join(tempDir.path, 'notes', 'note-c.md'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('---\nstatus: draft\n---\n\n$sharedBody');
+
+      File(p.join(tempDir.path, 'notes', 'unrelated.md'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync(
+          '---\nstatus: draft\n---\n\n# Sourdough\n\nHydration and coil folds for sourdough bread baking.\n',
+        );
+
+      final manifest = await VaultScanner(config).scan();
+      await IndexBuilder(config, const Analyzer()).build(manifest);
+      reader = await IndexReader.open(config.indexPath);
+      searcher = Searcher(reader, config);
+    });
+
+    tearDown(() async {
+      await reader.close();
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+
+    test(
+        'finds near-duplicate peers for a note with heavy frontmatter '
+        '(regression: frontmatter terms used to crowd out the query budget)',
+        () async {
+      final docs = await reader.allDocs();
+      final noteA = docs.firstWhere((d) => d.path == 'notes/note-a.md');
+
+      final hits = await searcher.similarTo(noteA);
+
+      expect(hits, isNotEmpty,
+          reason: 'a note with a shared body must find its near-duplicate '
+              'peers even when its frontmatter is large');
+      expect(
+        hits.map((h) => h.doc.path).toSet(),
+        {'notes/note-b.md', 'notes/note-c.md'},
+      );
+      expect(hits.map((h) => h.doc.path), isNot(contains('notes/note-a.md')));
+    });
+
+    test('a sparse-frontmatter peer also finds its duplicates', () async {
+      final docs = await reader.allDocs();
+      final noteB = docs.firstWhere((d) => d.path == 'notes/note-b.md');
+
+      final hits = await searcher.similarTo(noteB);
+
+      expect(
+        hits.map((h) => h.doc.path).toSet(),
+        {'notes/note-a.md', 'notes/note-c.md'},
+      );
     });
   });
 }

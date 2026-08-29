@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:my_brain/src/cli/vault_context.dart' show CliError;
 import 'package:my_brain/src/config.dart';
 import 'package:my_brain/src/edit/rewriter.dart';
 import 'package:my_brain/src/index/builder.dart';
@@ -9,6 +10,9 @@ import 'package:my_brain/src/text/tokenizer.dart';
 import 'package:my_brain/src/vault/scanner.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
+/// Matches a thrown [CliError].
+final Matcher _throwsCliError = throwsA(isA<CliError>());
 
 /// Builds a real vault on disk, indexes it, and hands back the pieces the
 /// rewriter needs. Going through the index rather than hand-built [DocRecord]s
@@ -45,7 +49,8 @@ void main() {
     test('preserves alias and anchor, and keeps bare-name links bare',
         () async {
       final v = await _vault(dir, {
-        'notes/target.md': '---\ntitle: Deep Work\n---\n\n# Deep Work\n\nBody.\n',
+        'notes/target.md':
+            '---\ntitle: Deep Work\n---\n\n# Deep Work\n\nBody.\n',
         'notes/ref.md': '---\ntitle: Ref\n---\n\n'
             'Plain [[Deep Work]], alias [[Deep Work|focused effort]], '
             'anchor [[Deep Work#Claim]], both '
@@ -156,7 +161,8 @@ void main() {
       await rewriter
           .apply(rewriter.planRename('notes/target.md', 'notes/focus.md'));
 
-      expect(File(p.join(dir.path, 'notes', 'target.md')).existsSync(), isFalse);
+      expect(
+          File(p.join(dir.path, 'notes', 'target.md')).existsSync(), isFalse);
       expect(File(p.join(dir.path, 'notes', 'focus.md')).existsSync(), isTrue);
       expect(read('notes/a.md'), contains('[[focus]]'));
       expect(read('notes/b.md'), contains('[[focus|it]]'));
@@ -169,7 +175,8 @@ void main() {
       });
 
       final rewriter = LinkRewriter(v.config, v.docs);
-      await rewriter.apply(rewriter.planRename('target.md', 'archive/2026/t.md'));
+      await rewriter
+          .apply(rewriter.planRename('target.md', 'archive/2026/t.md'));
       expect(
         File(p.join(dir.path, 'archive', '2026', 't.md')).existsSync(),
         isTrue,
@@ -183,9 +190,37 @@ void main() {
       });
 
       final rewriter = LinkRewriter(v.config, v.docs);
+      expect(() => rewriter.planRename('a.md', 'b.md'), _throwsCliError);
+    });
+  });
+
+  group('collision safety (bug 1)', () {
+    test(
+        'planRename throws before any file is touched, so --dry-run '
+        'reports the collision too', () async {
+      final v = await _vault(dir, {
+        'a.md': '# A\n',
+        'b.md': '# B\n',
+        'ref.md': 'See [[a]].\n',
+      });
+
+      final rewriter = LinkRewriter(v.config, v.docs);
+      expect(() => rewriter.planRename('a.md', 'b.md'), _throwsCliError);
+
+      // Nothing on disk moved or changed: the referrer was never rewritten,
+      // the source was never moved, and the pre-existing destination is
+      // untouched.
+      expect(read('a.md'), '# A\n');
+      expect(read('b.md'), '# B\n');
+      expect(read('ref.md'), 'See [[a]].\n');
+    });
+
+    test('a genuinely missing note raises CliError, not ArgumentError',
+        () async {
+      final v = await _vault(dir, {'a.md': '# A\n'});
       expect(
-        () => rewriter.apply(rewriter.planRename('a.md', 'b.md')),
-        throwsArgumentError,
+        () => LinkRewriter(v.config, v.docs).planRename('nope.md', 'x.md'),
+        _throwsCliError,
       );
     });
   });
@@ -208,7 +243,8 @@ void main() {
         'Plain Deep Work and aliased focused effort and anchored '
         'the ceiling.\n',
       );
-      expect(File(p.join(dir.path, 'notes', 'target.md')).existsSync(), isFalse);
+      expect(
+          File(p.join(dir.path, 'notes', 'target.md')).existsSync(), isFalse);
     });
 
     test('deletes a note nothing points at', () async {
@@ -221,11 +257,126 @@ void main() {
     });
   });
 
-  test('rejects a path that is not an indexed note', () async {
-    final v = await _vault(dir, {'a.md': '# A\n'});
-    expect(
-      () => LinkRewriter(v.config, v.docs).planRename('nope.md', 'x.md'),
-      throwsArgumentError,
-    );
+  group('markdown links (bug 3)', () {
+    test('rename rewrites a markdown link target, keeping the display text',
+        () async {
+      final v = await _vault(dir, {
+        'notes/target.md': '# Target\n',
+        'notes/ref.md': 'See [Target](target.md) for more.\n',
+      });
+
+      final rewriter = LinkRewriter(v.config, v.docs);
+      final plan = rewriter.planRename('notes/target.md', 'notes/moved.md');
+      expect(plan.edits, hasLength(1));
+
+      await rewriter.apply(plan);
+      expect(read('notes/ref.md'), 'See [Target](moved.md) for more.\n');
+    });
+
+    test('a markdown link written as a path keeps the path style', () async {
+      final v = await _vault(dir, {
+        'notes/target.md': '# Target\n',
+        'notes/ref.md': 'See [Target](notes/target.md) for more.\n',
+      });
+
+      final rewriter = LinkRewriter(v.config, v.docs);
+      await rewriter
+          .apply(rewriter.planRename('notes/target.md', 'archive/moved.md'));
+      expect(
+        read('notes/ref.md'),
+        'See [Target](archive/moved.md) for more.\n',
+      );
+    });
+
+    test('delete replaces a markdown link with its display text', () async {
+      final v = await _vault(dir, {
+        'notes/target.md': '# Target\n',
+        'notes/ref.md': 'See [Target](target.md) for more.\n',
+      });
+
+      final rewriter = LinkRewriter(v.config, v.docs);
+      await rewriter.apply(rewriter.planDelete('notes/target.md'));
+      expect(read('notes/ref.md'), 'See Target for more.\n');
+    });
+
+    test('an attachment link is left alone and never lands in unresolved',
+        () async {
+      final v = await _vault(dir, {
+        'notes/target.md': '# Target\n',
+        'notes/ref.md': 'See [Target](target.md) and '
+            '![diagram](../assets/diagram.png).\n',
+      });
+
+      final rewriter = LinkRewriter(v.config, v.docs);
+      final plan = rewriter.planRename('notes/target.md', 'notes/moved.md');
+      expect(plan.edits, hasLength(1), reason: 'only the note link counts');
+      expect(plan.unresolved, isEmpty);
+
+      await rewriter.apply(plan);
+      expect(
+        read('notes/ref.md'),
+        contains('![diagram](../assets/diagram.png)'),
+      );
+    });
+  });
+
+  group('bare-name rename keeps the source directory (bug 6)', () {
+    test('renaming to a bare new name keeps the note in its directory',
+        () async {
+      final v = await _vault(dir, {
+        'notes/sub/gamma.md': '# Gamma\n',
+        'notes/sub/ref.md': 'See [[Gamma]].\n',
+      });
+
+      final rewriter = LinkRewriter(v.config, v.docs);
+      final plan = rewriter.planRename('notes/sub/gamma.md', 'Delta');
+      expect(plan.to, 'notes/sub/Delta.md');
+
+      await rewriter.apply(plan);
+      expect(
+        File(p.join(dir.path, 'notes', 'sub', 'Delta.md')).existsSync(),
+        isTrue,
+      );
+      expect(File(p.join(dir.path, 'Delta.md')).existsSync(), isFalse,
+          reason: 'must not have relocated to the vault root');
+    });
+
+    test('a root-level note with a bare new name stays at the root', () async {
+      final v = await _vault(dir, {'gamma.md': '# Gamma\n'});
+      final plan =
+          LinkRewriter(v.config, v.docs).planRename('gamma.md', 'delta');
+      expect(plan.to, 'delta.md');
+    });
+  });
+
+  group('unresolved lists only actual referrers (bug 7)', () {
+    test(
+        'a since-deleted file that never linked to the target is not '
+        'reported', () async {
+      final v = await _vault(dir, {
+        'target.md': '# Target\n',
+        'unrelated.md': 'Nothing to see here.\n',
+      });
+      // Simulate a stale index: unrelated.md was deleted from disk after
+      // indexing, without ever linking to target.md.
+      File(p.join(dir.path, 'unrelated.md')).deleteSync();
+
+      final plan =
+          LinkRewriter(v.config, v.docs).planRename('target.md', 'moved.md');
+      expect(plan.unresolved, isEmpty);
+    });
+
+    test('a since-deleted file that did link to the target is reported',
+        () async {
+      final v = await _vault(dir, {
+        'target.md': '# Target\n',
+        'ref.md': 'See [[target]].\n',
+      });
+      File(p.join(dir.path, 'ref.md')).deleteSync();
+
+      final plan =
+          LinkRewriter(v.config, v.docs).planRename('target.md', 'moved.md');
+      expect(plan.unresolved, {'ref.md': 'file no longer exists'});
+    });
   });
 }

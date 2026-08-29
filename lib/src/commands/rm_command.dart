@@ -21,7 +21,12 @@ class RmCommand extends Command<int> {
       ..addFlag('dry-run',
           negatable: false, help: 'Show the plan without applying it.')
       ..addFlag('yes',
-          negatable: false, help: 'Skip the interactive confirmation.');
+          negatable: false, help: 'Skip the interactive confirmation.')
+      ..addFlag('force',
+          negatable: false,
+          help: 'Proceed even if the index is stale. A note added or '
+              'changed since the last `my-brain index` will not have its '
+              'links rewritten.');
   }
 
   @override
@@ -37,6 +42,7 @@ class RmCommand extends Command<int> {
     final noteArg = rest.single;
     final dryRun = argResults!['dry-run'] as bool;
     final yes = argResults!['yes'] as bool;
+    final force = argResults!['force'] as bool;
 
     VaultContext ctx;
     try {
@@ -47,6 +53,18 @@ class RmCommand extends Command<int> {
     }
 
     try {
+      // rm mutates files: a note missed by a stale index would have its
+      // links to the deleted note permanently orphaned rather than merely
+      // reported, so refuse outright instead of only warning.
+      final staleness = await ctx.checkStaleness();
+      if (staleness.stale && !force) {
+        output.error(
+          'index is stale (${staleness.summary}); run `my-brain index` '
+          'first, or pass --force to proceed anyway',
+        );
+        return 3;
+      }
+
       final reader = await ctx.openIndex();
       final docs = await reader.allDocs();
       final doc = await ctx.resolveNote(noteArg);
@@ -62,8 +80,8 @@ class RmCommand extends Command<int> {
 
       if (!dryRun) {
         if (!yes &&
-            !output.confirm(
-                'delete ${doc.path} and rewrite referring links?')) {
+            !output
+                .confirm('delete ${doc.path} and rewrite referring links?')) {
           output.error('aborted');
           return 1;
         }

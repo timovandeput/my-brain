@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import '../config.dart';
 import '../model.dart';
 import '../text/tokenizer.dart';
+import '../vault/frontmatter.dart';
 import 'reader.dart';
 
 /// Ranked retrieval over an [IndexReader].
@@ -151,8 +152,18 @@ class Searcher {
     if (!file.existsSync()) return const [];
     final source = await file.readAsString();
 
+    // Analyze the body only, not the raw file source. Frontmatter keys and
+    // non-tag values are never indexed as terms (see noteTerms), so every
+    // frontmatter term has docFreq 0 - which the IDF formula below turns
+    // into the *highest* possible score. Left in, those terms would fill
+    // the whole `scored.take(20)` query budget with terms that then match
+    // nothing, and a note with enough frontmatter keys would look like it
+    // has no similar notes at all even when its body is a near-duplicate of
+    // its peers.
+    final body = source.substring(parseFrontmatter(source).bodyOffset);
+
     const analyzer = Analyzer();
-    final tokens = analyzer.analyze(source);
+    final tokens = analyzer.analyze(body);
     if (tokens.isEmpty) return const [];
 
     final termFrequency = <String, int>{};
@@ -164,6 +175,10 @@ class Searcher {
     final scored = <MapEntry<String, double>>[];
     for (final entry in termFrequency.entries) {
       final docFreq = await reader.docFrequency(entry.key);
+      // A term no indexed document contains can never contribute to a
+      // search score; keeping it would still waste a slot in the top-20
+      // query budget on a term that matches nothing.
+      if (docFreq == 0) continue;
       final idf = math.log(1 + (docCount - docFreq + 0.5) / (docFreq + 0.5));
       scored.add(MapEntry(entry.key, entry.value * idf));
     }

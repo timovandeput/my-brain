@@ -325,6 +325,18 @@ class IndexWriter {
   }
 }
 
+/// A human-readable reason from a [FileSystemException], folding in the OS
+/// error message when there is one (permission denied, ...) since the
+/// exception's own [FileSystemException.message] alone is often generic
+/// ("Cannot open file").
+String _fileSystemErrorReason(FileSystemException e) {
+  final osMessage = e.osError?.message;
+  if (osMessage != null && osMessage.isNotEmpty) {
+    return '${e.message}: $osMessage';
+  }
+  return e.message;
+}
+
 int _utf8Length(String s) {
   // Matches dart:convert utf8.encode's byte count without allocating twice;
   // codeUnits are UTF-16, so surrogate pairs count as one 4-byte sequence.
@@ -350,6 +362,41 @@ int _utf8Length(String s) {
   return len;
 }
 
+/// One file the builder could not turn into an [IndexableDoc].
+///
+/// Covers both an unreadable file (permission denied, disappeared mid-scan)
+/// and one that could be read but not decoded as UTF-8 (stray latin-1 or
+/// binary content) - either way the file is left out of the index rather
+/// than aborting the whole build.
+class SkippedFile {
+  /// Vault-relative path, as in [ScannedFile.path].
+  final String path;
+
+  /// Human-readable reason it was skipped.
+  final String reason;
+
+  const SkippedFile(this.path, this.reason);
+}
+
+/// Result of a full index build: the persisted [stats], plus any files that
+/// were skipped rather than indexed.
+///
+/// Exposes the [IndexStats] fields directly as well, so existing call sites
+/// that only cared about stats keep working unchanged against the new
+/// return type.
+class BuildResult {
+  final IndexStats stats;
+  final List<SkippedFile> skipped;
+
+  const BuildResult(this.stats, this.skipped);
+
+  int get docCount => stats.docCount;
+  int get termCount => stats.termCount;
+  int get postingCount => stats.postingCount;
+  int get indexBytes => stats.indexBytes;
+  Duration get elapsed => stats.elapsed;
+}
+
 /// Builds `.brain/index.bin` from a scanned file set.
 ///
 /// Indexing is a full rebuild rather than an incremental merge. Rebuilding a
@@ -368,17 +415,45 @@ class IndexBuilder {
 
   /// Reads every file in [manifest], analyses it, and writes the index.
   ///
+  /// A file that cannot be read (permission denied, disappeared mid-scan) or
+  /// decoded as UTF-8 (stray latin-1 or binary content) is skipped rather
+  /// than aborting the whole build - one bad note should never leave the
+  /// user with no index at all. Skipped files are reported in the returned
+  /// [BuildResult.skipped].
+  ///
   /// [onProgress] is called with the number of documents processed so far, for
   /// the CLI progress line; it may be called on any interval.
-  Future<IndexStats> build(
+  Future<BuildResult> build(
     VaultManifest manifest, {
     void Function(int done, int total)? onProgress,
   }) async {
     final total = manifest.files.length;
     final docs = <IndexableDoc>[];
+    final skipped = <SkippedFile>[];
+    final allowedAttrs = config.filterableFrontmatter
+        ?.map((e) => e.toLowerCase().trim())
+        .toSet();
     var done = 0;
     for (final file in manifest.files) {
-      final source = await File(file.absolutePath).readAsString();
+      String source;
+      try {
+        source = await File(file.absolutePath).readAsString();
+      } on FileSystemException catch (e) {
+        // Covers both an unreadable file (permission denied, disappeared
+        // mid-scan - surfaces as PathAccessException, a FileSystemException
+        // subtype) and one that reads fine but is not valid UTF-8 (stray
+        // latin-1 or binary content - readAsString throws a
+        // FileSystemException for that too, not a FormatException).
+        skipped.add(SkippedFile(file.path, _fileSystemErrorReason(e)));
+        done++;
+        onProgress?.call(done, total);
+        continue;
+      } on FormatException catch (e) {
+        skipped.add(SkippedFile(file.path, 'not valid UTF-8 (${e.message})'));
+        done++;
+        onProgress?.call(done, total);
+        continue;
+      }
       final slash = file.path.lastIndexOf('/');
       final filename = slash < 0 ? file.path : file.path.substring(slash + 1);
 
@@ -395,6 +470,13 @@ class IndexBuilder {
       };
       if (tags.isNotEmpty) {
         attributes['tags'] = tags.toList()..sort();
+      }
+      // A non-null filterableFrontmatter restricts the attribute index to
+      // just these keys, so a vault with large frontmatter can keep its
+      // attribute region small; a null list (the default) indexes every
+      // scalar/list key.
+      if (allowedAttrs != null) {
+        attributes.removeWhere((key, _) => !allowedAttrs.contains(key));
       }
 
       final outLinks = <String>[
@@ -420,6 +502,7 @@ class IndexBuilder {
     }
 
     final writer = IndexWriter(config, manifest.hash);
-    return writer.writeTo(docs);
+    final stats = await writer.writeTo(docs);
+    return BuildResult(stats, skipped);
   }
 }

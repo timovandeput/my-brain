@@ -39,10 +39,12 @@ class IndexCommand extends Command<int> {
     output.progress('indexing ${manifest.files.length} files...');
 
     final builder = IndexBuilder(ctx.config, const Analyzer());
-    final stats = await builder.build(
+    final result = await builder.build(
       manifest,
       onProgress: (done, total) => output.progress('indexed $done/$total'),
     );
+    final stats = result.stats;
+    final skipped = result.skipped;
 
     output.emit(
       {
@@ -51,6 +53,9 @@ class IndexCommand extends Command<int> {
         'postingCount': stats.postingCount,
         'indexBytes': stats.indexBytes,
         'elapsedMs': stats.elapsed.inMilliseconds,
+        'skipped': [
+          for (final s in skipped) {'path': s.path, 'reason': s.reason},
+        ],
       },
       () {
         if (showStats) {
@@ -62,6 +67,13 @@ class IndexCommand extends Command<int> {
         } else {
           output.line(
               'indexed ${stats.docCount} docs in ${stats.elapsed.inMilliseconds}ms');
+        }
+        if (skipped.isNotEmpty) {
+          output.line(
+              'skipped ${skipped.length} unreadable file(s):');
+          for (final s in skipped) {
+            output.line('  ${s.path}: ${s.reason}');
+          }
         }
       },
     );
