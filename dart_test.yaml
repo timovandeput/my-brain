@@ -1,0 +1,14 @@
+# The 5,000-note scale test builds a real vault on disk and takes tens of
+# seconds. It guards against algorithmic regressions in retrieval, so it is
+# worth running before a release rather than on every edit.
+#   dart test            -> everything except the scale test
+#   dart test -P scale   -> include the scale test
+tags:
+  scale:
+    skip: "slow; run with: dart test -P scale"
+
+presets:
+  scale:
+    tags:
+      scale:
+        skip: false

@@ -35,6 +35,18 @@ class StalenessReport {
 
   int get total => added + changed + removed;
 
+  /// A short description of what drifted, for the warning line. Says which
+  /// way the vault moved rather than lumping everything under "changed",
+  /// because "3 removed" and "3 added" call for different reactions.
+  String get summary {
+    final parts = <String>[
+      if (added > 0) '$added added',
+      if (changed > 0) '$changed changed',
+      if (removed > 0) '$removed removed',
+    ];
+    return parts.isEmpty ? 'changed' : parts.join(', ');
+  }
+
   Map<String, Object?> toJson() => {
         'stale': stale,
         'added': added,

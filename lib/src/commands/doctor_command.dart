@@ -34,7 +34,7 @@ class DoctorCommand extends Command<int> {
       final staleness = await ctx.checkStaleness();
       if (staleness.stale) {
         output.warn(
-            'index is stale (${staleness.total} changed); run `my-brain index`');
+            'index is stale (${staleness.summary}); run `my-brain index`');
       }
 
       final reader = await ctx.openIndex();
