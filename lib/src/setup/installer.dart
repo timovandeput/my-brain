@@ -210,15 +210,39 @@ class VaultInstaller {
     }
   }
 
+  /// Mirrors the vault's skills into [to], and removes copies of skills this
+  /// version no longer ships.
+  ///
+  /// Only directories named after a skill my-brain owns are pruned; anything
+  /// else under `.claude/skills` belongs to the user and is left alone.
   void _copySkills(String from, String to) {
     final source = Directory(from);
     if (!source.existsSync()) return;
+
+    final owned = source
+        .listSync(followLinks: false)
+        .whereType<Directory>()
+        .map((Directory d) => p.basename(d.path))
+        .toSet();
+
     for (final entity in source.listSync(recursive: true, followLinks: false)) {
       if (entity is! File) continue;
       final rel = p.relative(entity.path, from: from);
       final dest = File(p.join(to, rel));
       dest.parent.createSync(recursive: true);
       entity.copySync(dest.path);
+    }
+
+    // A skill dropped in a later version would otherwise linger here forever,
+    // and a stale copy of an instruction file is worse than none.
+    final destination = Directory(to);
+    if (!destination.existsSync()) return;
+    for (final entity in destination.listSync(followLinks: false)) {
+      if (entity is! Directory) continue;
+      final name = p.basename(entity.path);
+      if (!name.startsWith('brain-')) continue;
+      if (owned.contains(name)) continue;
+      entity.deleteSync(recursive: true);
     }
   }
 

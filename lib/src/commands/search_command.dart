@@ -79,6 +79,16 @@ class SearchCommand extends Command<int> {
             'index is stale (${staleness.summary}); run `my-brain index`');
       }
 
+      // A query whose every word is a stopword or a single character analyses
+      // to nothing, and would otherwise come back as a bare "no results" -
+      // indistinguishable from a query that simply found nothing.
+      if (query.terms.isEmpty && rawQuery.trim().isNotEmpty) {
+        output.warn(
+          'nothing to match on: every word in "$rawQuery" is a stopword or '
+          'too short. Try more specific words.',
+        );
+      }
+
       final reader = await ctx.openIndex();
       final searcher = Searcher(reader, ctx.config);
       final rawHits = await searcher.search(query);
