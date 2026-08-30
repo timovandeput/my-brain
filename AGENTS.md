@@ -24,11 +24,19 @@ dart analyze --fatal-infos                    # what CI gates on
 dart run tool/gen_templates.dart              # regenerate templates.g.dart from assets/templates/
 ./tool/build.sh                               # gen templates + analyze + compile to build/my-brain
 ./tool/install.sh                             # build, then symlink build/my-brain into ~/.local/bin
+./tool/install-release.sh                     # install/update from a published release, no toolchain
 ```
 
-`dart compile exe` cannot cross-compile; other platforms come from the matrix in
-`.github/workflows/release.yml`, which runs `gen_templates` → `analyze --fatal-infos` → `dart test`
-→ `dart test -P scale`.
+`dart compile exe` cannot cross-compile, so every platform needs its own runner. Two workflows:
+
+- `.github/workflows/ci.yml` runs on pull requests and pushes to `main`. `lint` regenerates
+  `templates.g.dart` and fails if that changes a tracked file, then `analyze --fatal-infos`; `test`
+  runs `dart test` and `dart test -P scale`; `build` compiles and smoke-tests the binary on all four
+  release targets, so a change that breaks the release build fails on the pull request.
+- `.github/workflows/release.yml` runs on a `v*` tag. It first checks the tag matches
+  `myBrainVersion` in `lib/src/cli/runner_version.dart` — bump that in the same commit as the tag —
+  then repeats the full test suite, builds macos-arm64, macos-x64, linux-x64 and windows-x64, and
+  publishes the archives plus a `SHA256SUMS.txt` that `tool/install-release.sh` verifies against.
 
 ## Architecture
 

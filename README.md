@@ -17,13 +17,43 @@ its manual and stays in step with whatever the binary can currently do.
 
 ## Install
 
+### From a release
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/timovandeput/my-brain/main/tool/install-release.sh | bash
+my-brain version
+```
+
+That picks the binary for your machine out of the latest GitHub release, checks it against the
+release's `SHA256SUMS.txt`, and puts it in `~/.local/bin`. Running the same line again is how you
+update — it replaces whatever is installed. Two environment variables steer it:
+
+- `INSTALL_DIR=/usr/local/bin` installs somewhere else.
+- `MY_BRAIN_VERSION=v0.1.0` pins a release instead of taking the latest.
+
+To do it by hand, take an archive from the [releases page][releases]:
+`my-brain-macos-arm64.tar.gz` for Apple silicon, `my-brain-macos-x64.tar.gz` for Intel Macs, plus
+`my-brain-linux-x64.tar.gz` and `my-brain-windows-x64.zip`. Unpack it and move `my-brain` onto your
+PATH. A browser download is quarantined by macOS and Gatekeeper will refuse to run it, so clear the
+flag first — the install script uses curl, which does not set it:
+
+```sh
+tar -xzf my-brain-macos-arm64.tar.gz
+xattr -d com.apple.quarantine ./my-brain 2>/dev/null || true
+chmod +x ./my-brain && mv ./my-brain ~/.local/bin/
+```
+
+[releases]: https://github.com/timovandeput/my-brain/releases/latest
+
+### From source
+
 ```sh
 ./tool/install.sh          # builds and links into ~/.local/bin
 ```
 
 Dart cannot cross-compile, so `dart compile exe` produces a binary for the machine that runs it.
 Binaries for macOS, Linux and Windows come from the CI matrix in
-`.github/workflows/release.yml`.
+`.github/workflows/release.yml`, which is also what a tag publishes.
 
 ## Set up a vault
 
