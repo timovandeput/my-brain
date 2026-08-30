@@ -71,8 +71,8 @@ void main() {
         stale: false,
         pathPrefix: 'notes/',
       );
-      expect(_entries(scoped, 'brokenLinks').single['referrers'],
-          ['notes/a.md']);
+      expect(
+          _entries(scoped, 'brokenLinks').single['referrers'], ['notes/a.md']);
 
       final all = buildDoctorReport(
         docs: docs,
@@ -84,7 +84,8 @@ void main() {
       expect(all.containsKey('pathPrefix'), isFalse);
     });
 
-    test('resolution still sees the whole vault: a note linked only from '
+    test(
+        'resolution still sees the whole vault: a note linked only from '
         'outside the subtree is not an orphan', () {
       final docs = [
         _doc(0, 'notes/linked.md', title: 'Linked'),
@@ -102,7 +103,8 @@ void main() {
       expect(_paths(report, 'orphans'), ['notes/alone.md']);
     });
 
-    test('a title collision shows the colliding path even when it sits '
+    test(
+        'a title collision shows the colliding path even when it sits '
         'outside the subtree', () {
       final docs = [
         _doc(0, 'notes/postgres.md', title: 'Postgres'),

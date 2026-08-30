@@ -41,8 +41,8 @@ void main() {
   });
 
   test('a fresh vault gets the content directories', () {
-    expect(installer.plan().missingDirectories,
-        VaultInstaller.contentDirectories);
+    expect(
+        installer.plan().missingDirectories, VaultInstaller.contentDirectories);
     applyAll();
 
     for (final name in VaultInstaller.contentDirectories) {

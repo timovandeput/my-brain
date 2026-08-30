@@ -62,7 +62,8 @@ void main() {
 
   group('Analyzer.analyze', () {
     test('drops short tokens', () {
-      const analyzer = Analyzer(minLength: 3, stem: false, dropStopwords: false);
+      const analyzer =
+          Analyzer(minLength: 3, stem: false, dropStopwords: false);
       expect(analyzer.analyze('a go id ai team'), ['team']);
     });
 
@@ -130,7 +131,8 @@ Some #inline-tag content about focus and meetings.
     });
 
     test('note with no frontmatter still yields title from filename', () {
-      final note = parseNote('Just a body, no headings.', filename: 'plain-note.md');
+      final note =
+          parseNote('Just a body, no headings.', filename: 'plain-note.md');
       final terms = noteTerms(note, analyzer()).toList();
       expect(
         terms.any((FieldTerm t) => t.field == Field.title && t.term == 'plain'),

@@ -142,8 +142,8 @@ void main() {
     //  2: "alpha alpha"    status=final   project=apollo
     //  3: "beta gamma"     status=final   project=zeta
     //  4: "gamma"          status=draft   project=apollo
-    IndexableDoc doc(int i, List<String> bodyTerms, String status,
-            String project) =>
+    IndexableDoc doc(
+            int i, List<String> bodyTerms, String status, String project) =>
         IndexableDoc(
           path: 'notes/doc-$i.md',
           title: 'Doc $i',
@@ -281,8 +281,7 @@ void main() {
           {'notes/doc-2.md', 'notes/doc-3.md'});
     });
 
-    test('pathPrefix restricts to matching paths (opt-in O(N) path)',
-        () async {
+    test('pathPrefix restricts to matching paths (opt-in O(N) path)', () async {
       final hits = await searcher.search(const SearchQuery(
         terms: ['alpha', 'beta', 'gamma'],
         pathPrefix: 'notes/doc-0',
@@ -298,8 +297,7 @@ void main() {
       expect(hits, hasLength(2));
     });
 
-    test('unknown query terms contribute nothing but do not error',
-        () async {
+    test('unknown query terms contribute nothing but do not error', () async {
       final hits = await searcher.search(
         const SearchQuery(terms: ['alpha', 'zzz-nonexistent']),
       );
@@ -338,8 +336,7 @@ Engineering, design and product all review the roadmap before it ships.
 ''';
 
     setUp(() async {
-      tempDir =
-          Directory.systemTemp.createTempSync('my_brain_similar_test_');
+      tempDir = Directory.systemTemp.createTempSync('my_brain_similar_test_');
       config = BrainConfig(vaultRoot: tempDir.path);
 
       // note-a.md carries a large frontmatter block - twenty keys whose

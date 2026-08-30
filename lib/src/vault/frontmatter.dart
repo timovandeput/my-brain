@@ -108,7 +108,8 @@ Object? _convertValue(Object? value) {
 }
 
 Map<String, Object?> _convertMap(YamlMap map) => <String, Object?>{
-      for (final entry in map.entries) entry.key.toString(): _convertValue(entry.value),
+      for (final entry in map.entries)
+        entry.key.toString(): _convertValue(entry.value),
     };
 
 /// One line of source text, with its content (EOL stripped) and the character

@@ -141,8 +141,7 @@ void main() {
 
     test('accepts --from alone', () {
       expect(
-        () =>
-            validateLinksSelector(to: null, from: 'Some Note', broken: false),
+        () => validateLinksSelector(to: null, from: 'Some Note', broken: false),
         returnsNormally,
       );
     });

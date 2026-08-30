@@ -202,9 +202,8 @@ class DoctorCommand extends Command<int> {
           final malformedFrontmatter = paths('malformedFrontmatter');
           final frontmatterLinks = paths('frontmatterLinks');
 
-          output.line(prefix == null
-              ? 'doctor report:'
-              : 'doctor report for $prefix:');
+          output.line(
+              prefix == null ? 'doctor report:' : 'doctor report for $prefix:');
           output.line('  broken links: ${brokenLinks.length}');
           for (final b in brokenLinks) {
             output.line(
@@ -228,8 +227,8 @@ class DoctorCommand extends Command<int> {
           for (final path in orphans) {
             output.line('    $path');
           }
-          output.line(
-              '  unreadable frontmatter: ${malformedFrontmatter.length}');
+          output
+              .line('  unreadable frontmatter: ${malformedFrontmatter.length}');
           for (final path in malformedFrontmatter) {
             output.line('    $path  (no attributes: --filter cannot see it)');
           }

@@ -1,12 +1,25 @@
-name: build
+name: release
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
-  pull_request:
 
 jobs:
+  # A tag whose name disagrees with the version the binary reports would ship a
+  # my-brain that lies about which release it is, so fail before building.
+  verify-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches myBrainVersion
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          declared=$(grep -oE "myBrainVersion = '[^']+'" lib/src/cli/runner_version.dart | cut -d"'" -f2)
+          if [ "$tag" != "$declared" ]; then
+            echo "tag $GITHUB_REF_NAME does not match myBrainVersion $declared" >&2
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -19,11 +32,13 @@ jobs:
       - run: dart test -P scale
 
   build:
-    needs: test
+    needs: [verify-tag, test]
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Apple silicon only: GitHub's Intel macOS runner is on its way out,
+          # so an Intel Mac builds from source with tool/build.sh instead.
           - os: macos-latest
             target: macos-arm64
             artifact: my-brain
@@ -39,15 +54,29 @@ jobs:
       - uses: dart-lang/setup-dart@v1
       - run: dart pub get
       - run: dart run tool/gen_templates.dart
+      # dart compile exe will not create the output directory itself.
+      - name: Make output directory
+        shell: bash
+        run: mkdir -p build
       # dart compile exe targets the host only, which is why this is a matrix.
       - run: dart compile exe bin/my_brain.dart -o build/${{ matrix.artifact }}
+      - name: Smoke-test the binary
+        run: ./build/${{ matrix.artifact }} version
+
+      - name: Package (tar.gz)
+        if: matrix.os != 'windows-latest'
+        run: tar -czf my-brain-${{ matrix.target }}.tar.gz -C build ${{ matrix.artifact }}
+      - name: Package (zip)
+        if: matrix.os == 'windows-latest'
+        run: Compress-Archive -Path build/${{ matrix.artifact }} -DestinationPath my-brain-${{ matrix.target }}.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: my-brain-${{ matrix.target }}
-          path: build/${{ matrix.artifact }}
+          path: my-brain-${{ matrix.target }}.*
+          if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -56,13 +85,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
-      - name: Package per platform
+          merge-multiple: true
+      # tool/install-release.sh reads this file to check the download it just made,
+      # so the name and the plain `sha256sum -c` format are part of the contract.
+      - name: Checksums
         run: |
           cd dist
-          for d in */; do
-            name="${d%/}"
-            tar -czf "../$name.tar.gz" -C "$d" .
-          done
+          sha256sum my-brain-*.tar.gz my-brain-*.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
-          files: '*.tar.gz'
+          generate_release_notes: true
+          files: dist/*

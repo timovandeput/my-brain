@@ -125,8 +125,7 @@ void main() {
       expect(snippet, isNot(contains('\t')));
     });
 
-    test('returns the whole (trimmed) string when shorter than the window',
-        () {
+    test('returns the whole (trimmed) string when shorter than the window', () {
       const text = 'short text with a match inside it';
       final snippet = extractSnippet(text, ['match'], window: 200);
 

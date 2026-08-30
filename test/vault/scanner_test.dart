@@ -124,8 +124,7 @@ void main() {
       expect(manifest.files.map((f) => f.path).toList(), ['published/b.md']);
     });
 
-    test('a symlinked directory is not followed (no hang on a loop)',
-        () async {
+    test('a symlinked directory is not followed (no hang on a loop)', () async {
       writeFile('real/note.md', 'x');
       final link = Link(p.join(tmp.path, 'real', 'loop'));
       try {

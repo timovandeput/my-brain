@@ -18,7 +18,8 @@ void main() {
       expect(fm, same(Frontmatter.none));
     });
 
-    test('a stray --- later in the document is a horizontal rule, not '
+    test(
+        'a stray --- later in the document is a horizontal rule, not '
         'frontmatter', () {
       const source = 'Some intro text.\n\n---\n\nMore text after the rule.';
       final fm = parseFrontmatter(source);

@@ -86,10 +86,7 @@ List<String> _splitRun(String run) {
     } else if (prevDigit != currDigit) {
       // letter <-> digit boundary.
       boundary = true;
-    } else if (prevUpper &&
-        currUpper &&
-        i + 1 < n &&
-        _isLower(chars[i + 1])) {
+    } else if (prevUpper && currUpper && i + 1 < n && _isLower(chars[i + 1])) {
       // acronym followed by a capitalised word, e.g. HTMLParser -> HTML|Parser.
       boundary = true;
     }

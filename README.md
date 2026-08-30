@@ -17,13 +17,46 @@ its manual and stays in step with whatever the binary can currently do.
 
 ## Install
 
+### From a release, on macOS or Linux
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/timovandeput/my-brain/main/tool/install-release.sh | bash
+my-brain version
+```
+
+That picks the binary for your machine out of the latest GitHub release, checks it against the
+release's `SHA256SUMS.txt`, and puts it in `~/.local/bin`. Running the same line again is how you
+update — it replaces whatever is installed. Two environment variables steer it:
+
+- `INSTALL_DIR=/usr/local/bin` installs somewhere else.
+- `MY_BRAIN_VERSION=v0.1.0` pins a release instead of taking the latest.
+
+The script covers the two platforms it can install onto: Apple silicon Macs and x64 Linux. **On
+Windows**, take `my-brain-windows-x64.zip` from the [releases page][releases], unpack it, and put
+`my-brain.exe` in a directory on your PATH. An **Intel Mac** has no prebuilt binary at all —
+GitHub's Intel macOS runner is on its way out — so build from source as below.
+
+Installing by hand on macOS or Linux works the same way: take the archive, unpack it, move
+`my-brain` onto your PATH. A browser download is quarantined by macOS and Gatekeeper will refuse to
+run it, so clear the flag first — the install script uses curl, which does not set it:
+
+```sh
+tar -xzf my-brain-macos-arm64.tar.gz
+xattr -d com.apple.quarantine ./my-brain 2>/dev/null || true
+chmod +x ./my-brain && mv ./my-brain ~/.local/bin/
+```
+
+[releases]: https://github.com/timovandeput/my-brain/releases/latest
+
+### From source
+
 ```sh
 ./tool/install.sh          # builds and links into ~/.local/bin
 ```
 
 Dart cannot cross-compile, so `dart compile exe` produces a binary for the machine that runs it.
-Binaries for macOS, Linux and Windows come from the CI matrix in
-`.github/workflows/release.yml`.
+This is the route for any platform the release matrix in `.github/workflows/release.yml` does not
+cover, an Intel Mac among them.
 
 ## Set up a vault
 

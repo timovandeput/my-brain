@@ -36,8 +36,8 @@ void main() {
     final encoded = base64.encode(utf8.encode(file.readAsStringSync()));
     buffer
       ..writeln('/// Contents of `assets/templates/${entry.key}`.')
-      ..writeln('final String ${entry.value} =')
-      ..writeln("    utf8.decode(base64.decode('$encoded'));")
+      ..writeln(
+          "final String ${entry.value} = utf8.decode(base64.decode('$encoded'));")
       ..writeln();
   }
 
@@ -55,5 +55,15 @@ void main() {
   final out = File('lib/src/setup/templates.g.dart');
   out.parent.createSync(recursive: true);
   out.writeAsStringSync(buffer.toString());
+
+  // Formatting the output beats hand-wrapping it above: CI gates both on
+  // `dart format` and on a regeneration leaving no diff, and those two agree
+  // only if the generator emits exactly what the formatter would have written.
+  final formatted = Process.runSync('dart', ['format', out.path]);
+  if (formatted.exitCode != 0) {
+    stderr.writeln(formatted.stderr);
+    exit(formatted.exitCode);
+  }
+
   stdout.writeln('wrote ${out.path} (${_templates.length} templates)');
 }

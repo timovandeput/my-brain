@@ -119,8 +119,7 @@ class AttrsCommand extends Command<int> {
 
       final reader = await ctx.openIndex();
       final prefix = args['path-prefix'] as String?;
-      final scoped =
-          prefix == null ? null : await reader.docIdsUnder(prefix);
+      final scoped = prefix == null ? null : await reader.docIdsUnder(prefix);
       final census = await reader.attributeCensus(restrictTo: scoped);
       final noteCount = scoped?.length ?? reader.docCount;
       final summaries = summarizeAttributes(census)

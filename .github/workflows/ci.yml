@@ -1,0 +1,72 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push makes the previous run's verdict irrelevant, so don't pay for it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get
+      - run: dart run tool/gen_templates.dart
+      # templates.g.dart is checked in but generated from assets/templates/.
+      # Regenerating first turns an edit that skipped the generator into a
+      # failure here, rather than into a binary that ships stale templates.
+      - name: Check generated templates are in sync
+        run: git diff --exit-code lib/src/setup/templates.g.dart
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+      - run: dart analyze --fatal-infos
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get
+      - run: dart run tool/gen_templates.dart
+      - run: dart test
+      # The scale suite guards the seek-addressed read path against a
+      # regression to full-file deserialisation; it only catches that if it
+      # runs before the merge, not before the release.
+      - run: dart test -P scale
+
+  build:
+    # Proves the release artefact still compiles on every platform the release
+    # workflow ships, on the pull request rather than on the tag.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-arm64
+            artifact: my-brain
+          - os: ubuntu-latest
+            target: linux-x64
+            artifact: my-brain
+          - os: windows-latest
+            target: windows-x64
+            artifact: my-brain.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get
+      - run: dart run tool/gen_templates.dart
+      # dart compile exe will not create the output directory itself.
+      - name: Make output directory
+        shell: bash
+        run: mkdir -p build
+      # dart compile exe targets the host only, which is why this is a matrix.
+      - run: dart compile exe bin/my_brain.dart -o build/${{ matrix.artifact }}
+      - name: Smoke-test the binary
+        run: ./build/${{ matrix.artifact }} version
