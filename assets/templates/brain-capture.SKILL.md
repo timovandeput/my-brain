@@ -80,6 +80,10 @@ own sake become a filing chore forever after.
 - Give the note frontmatter: `title`, `tags`, `type`, `status`, `created`, `updated`. Add
   `project:`, `topic:`, `source:` or similar when the note belongs to something specific — those
   become search filters immediately.
+- **Reuse the vault's existing tags.** Every `--json` search hit carries its own `tags`, so the
+  results from step 2 already show you the vocabulary in use. Invent a new tag only when nothing
+  existing fits: `attention` and `focus` as two tags for one idea means a `--filter` finds half the
+  notes and the split is invisible until someone goes looking.
 - Write in the vault's existing voice and format. Match what is already there.
 - Link it: `[[Related Note]]` for every note you found in step 2 that is genuinely related.
 - **Add the links back.** Open each note you linked to and add a link to the new note where it fits

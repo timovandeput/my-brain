@@ -150,6 +150,9 @@ class IndexWriter {
       docRecsWriter.writeStringList(doc.aliases);
       docRecsWriter.writeStringList(doc.headings);
       docRecsWriter.writeStringList(doc.outLinks);
+      // Tags already live in the attribute index for filtering; this copy is
+      // what lets a search hit report its own tags without a scan.
+      docRecsWriter.writeStringList(doc.attributes['tags'] ?? const []);
       docRecsWriter.writeVarint(docLens[docId]);
       docRecsWriter.writeVarint(doc.wordCount);
       docRecsWriter.writeVarint(doc.mtimeMs);

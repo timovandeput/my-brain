@@ -401,6 +401,7 @@ class IndexReader {
       final aliases = cursor.readStringList();
       final headings = cursor.readStringList();
       final outLinks = cursor.readStringList();
+      final tags = cursor.readStringList();
       final length = cursor.readVarint();
       final wordCount = cursor.readVarint();
       final mtimeMs = cursor.readVarint();
@@ -412,6 +413,7 @@ class IndexReader {
         aliases: aliases,
         headings: headings,
         outLinks: outLinks,
+        tags: tags,
         length: length,
         wordCount: wordCount,
         mtimeMs: mtimeMs,

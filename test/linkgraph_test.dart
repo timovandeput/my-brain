@@ -8,6 +8,7 @@ DocRecord doc({
   String? title,
   List<String> aliases = const [],
   List<String> outLinks = const [],
+  List<String> tags = const [],
 }) =>
     DocRecord(
       docId: docId,
@@ -16,6 +17,7 @@ DocRecord doc({
       aliases: aliases,
       headings: const [],
       outLinks: outLinks,
+      tags: tags,
       length: 10,
       wordCount: 10,
       mtimeMs: 0,

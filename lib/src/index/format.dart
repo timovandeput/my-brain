@@ -35,8 +35,8 @@
 ///
 /// Region payloads:
 ///
-/// * **doc record** — path, title, aliases[], headings[], outLinks[] (strings),
-///   then varints: length, wordCount, mtimeMs, size.
+/// * **doc record** — path, title, aliases[], headings[], outLinks[], tags[]
+///   (strings), then varints: length, wordCount, mtimeMs, size.
 /// * **term entry** — string term, varint docFreq, u64 postingsOffset,
 ///   varint postingsByteLength. Term entries are sorted by UTF-8 byte order so
 ///   the offset table can be binary-searched.
@@ -55,7 +55,7 @@ import 'dart:typed_data';
 final Uint8List indexMagic = Uint8List.fromList(ascii.encode('MYBRAIN\x01'));
 
 /// Bumped whenever the layout changes in a way that invalidates old files.
-const int indexFormatVersion = 1;
+const int indexFormatVersion = 2;
 
 /// Size of the fixed header, padded for future fields.
 const int indexHeaderSize = 160;

@@ -84,6 +84,14 @@ class DocRecord {
   /// Resolved outgoing link targets as written (target only, no anchor/alias).
   final List<String> outLinks;
 
+  /// Frontmatter `tags` plus inline hashtags, lowercased and sorted.
+  ///
+  /// Stored on the record, not just in the attribute index, so a search hit
+  /// carries its own tags. The attribute index answers "which documents have
+  /// this tag"; it cannot answer "what are this document's tags" without a
+  /// scan, and an agent triaging results needs the latter.
+  final List<String> tags;
+
   /// Token count of the whole document; the BM25 length normaliser.
   final int length;
 
@@ -100,6 +108,7 @@ class DocRecord {
     required this.aliases,
     required this.headings,
     required this.outLinks,
+    required this.tags,
     required this.length,
     required this.wordCount,
     required this.mtimeMs,

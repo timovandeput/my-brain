@@ -204,6 +204,7 @@ Map<String, Object?> hitToJson(SearchHit hit, int rank) => {
       'path': hit.doc.path,
       'title': hit.doc.title,
       'aliases': hit.doc.aliases,
+      'tags': hit.doc.tags,
       'matchedTerms': hit.matchedTerms,
       'snippet': hit.snippet,
     };

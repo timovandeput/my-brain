@@ -12,6 +12,47 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
+  group('tags travel with the doc record', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('brain_tags_'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('round-trip through the index, from frontmatter and inline hashtags',
+        () async {
+      final config = BrainConfig(vaultRoot: dir.path);
+      final note = File(p.join(dir.path, 'notes', 'tagged.md'));
+      note.parent.createSync(recursive: true);
+      note.writeAsStringSync(
+        '---\ntitle: Tagged\ntags: [Postgres, performance]\n---\n\n'
+        '# Tagged\n\nBody mentioning #incident inline.\n',
+      );
+      final plain = File(p.join(dir.path, 'notes', 'plain.md'));
+      plain.writeAsStringSync('# Plain\n\nNo tags here.\n');
+
+      final manifest = await VaultScanner(config).scan();
+      await IndexBuilder(config, const Analyzer()).build(manifest);
+      final reader = await IndexReader.open(config.indexPath);
+      addTearDown(reader.close);
+
+      final docs = await reader.allDocs();
+      final tagged =
+          docs.firstWhere((DocRecord d) => d.path == 'notes/tagged.md');
+      // Lowercased and sorted, and inline hashtags are folded in with the
+      // frontmatter ones - the same set the attribute index filters on.
+      expect(tagged.tags, ['incident', 'performance', 'postgres']);
+
+      final untagged =
+          docs.firstWhere((DocRecord d) => d.path == 'notes/plain.md');
+      expect(untagged.tags, isEmpty);
+
+      // The record's tags must agree with what --filter would match.
+      for (final tag in tagged.tags) {
+        expect(await reader.attributeDocs('tags', tag), contains(tagged.docId));
+      }
+    });
+  });
+
+
   late Directory tempDir;
   late BrainConfig config;
 
