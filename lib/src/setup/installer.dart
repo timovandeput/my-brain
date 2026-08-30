@@ -84,6 +84,9 @@ class InstallPlan {
   final List<FileChange> changes;
   final SkillLinkKind skillLink;
 
+  /// Content directories that do not exist yet, vault-relative.
+  final List<String> missingDirectories;
+
   /// Absolute path of the `my-brain` binary recorded in AGENTS.md.
   final String binaryPath;
 
@@ -91,13 +94,17 @@ class InstallPlan {
     required this.vaultRoot,
     required this.changes,
     required this.skillLink,
+    required this.missingDirectories,
     required this.binaryPath,
   });
 
   List<FileChange> get pending =>
       changes.where((FileChange c) => !c.isNoop).toList();
 
-  bool get isUpToDate => pending.isEmpty && skillLink != SkillLinkKind.copy;
+  bool get isUpToDate =>
+      pending.isEmpty &&
+      missingDirectories.isEmpty &&
+      skillLink != SkillLinkKind.copy;
 }
 
 /// Creates and refreshes the my-brain files inside a vault.
@@ -113,6 +120,19 @@ class VaultInstaller {
   final String version;
 
   const VaultInstaller({required this.vaultRoot, required this.version});
+
+  /// The directories the vault's content lives in, vault-relative.
+  ///
+  /// The root is the agent's own instructions and the tool's dot-directories;
+  /// notes written beside them bury them, which is the whole reason these
+  /// exist. They are created empty and carry no placeholder file: git does not
+  /// track an empty directory, but a vault stops having empty ones the moment
+  /// it has a note.
+  static const List<String> contentDirectories = [
+    'notes',
+    'logs',
+    'attachments',
+  ];
 
   /// Where the agent should invoke the tool.
   ///
@@ -160,8 +180,20 @@ class VaultInstaller {
       vaultRoot: vaultRoot,
       changes: changes,
       skillLink: _skillLinkState(),
+      missingDirectories: [
+        for (final dir in contentDirectories)
+          if (!Directory(p.join(vaultRoot, dir)).existsSync()) dir,
+      ],
       binaryPath: binaryPath,
     );
+  }
+
+  /// Creates the content directories named in [relativePaths].
+  void applyDirectories(List<String> relativePaths) {
+    for (final dir in relativePaths) {
+      Directory(p.join(vaultRoot, p.joinAll(dir.split('/'))))
+          .createSync(recursive: true);
+    }
   }
 
   /// Writes [change] to disk, creating parent directories as needed.

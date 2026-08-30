@@ -16,6 +16,7 @@ void main() {
 
   void applyAll() {
     final plan = installer.plan();
+    installer.applyDirectories(plan.missingDirectories);
     for (final change in plan.pending) {
       installer.applyChange(change);
     }
@@ -37,6 +38,22 @@ void main() {
     expect(exists('.agents/skills/brain-capture/SKILL.md'), isTrue);
     expect(exists('.agents/skills/brain-maintain/SKILL.md'), isTrue);
     expect(read('CLAUDE.md').trim(), '@AGENTS.md');
+  });
+
+  test('a fresh vault gets the content directories', () {
+    expect(installer.plan().missingDirectories,
+        VaultInstaller.contentDirectories);
+    applyAll();
+
+    for (final name in VaultInstaller.contentDirectories) {
+      expect(Directory(p.join(dir.path, name)).existsSync(), isTrue,
+          reason: '$name/ must exist so notes never land in the root');
+    }
+  });
+
+  test('a directory the user already has is not proposed again', () {
+    Directory(p.join(dir.path, 'notes')).createSync();
+    expect(installer.plan().missingDirectories, isNot(contains('notes')));
   });
 
   test('is idempotent: a second run has nothing to do', () {

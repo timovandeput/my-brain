@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 
+import '../commands/attrs_command.dart';
 import '../commands/doctor_command.dart';
 import '../commands/index_command.dart';
 import '../commands/init_command.dart';
@@ -48,6 +49,7 @@ CommandRunner<int> buildRunner() {
     ..addCommand(SearchCommand())
     ..addCommand(SimilarCommand())
     ..addCommand(LinksCommand())
+    ..addCommand(AttrsCommand())
     ..addCommand(DoctorCommand())
     ..addCommand(RenameCommand())
     ..addCommand(RmCommand())

@@ -37,6 +37,9 @@ my-brain init
 ```
 AGENTS.md                                the agent's operating manual
 CLAUDE.md                                one line: @AGENTS.md
+notes/                                   every note
+logs/                                    dated raw capture
+attachments/                             anything that is not markdown
 .agents/skills/brain-capture/SKILL.md    manual-only: add information
 .agents/skills/brain-maintain/SKILL.md   manual-only: vault hygiene pass
 .claude/skills -> ../.agents/skills      so Claude Code finds the same files
@@ -63,17 +66,57 @@ Every command takes `--json`, which is the form the agent uses.
 | `index [--stats]` | Rebuild the index. |
 | `status` | Doc count, index size, and whether it still matches the files on disk. |
 | `search <words>` | Ranked lookup. `-n`, `--tag`, `--filter k=v`, `--not k=v`, `--path-prefix`. |
-| `similar <note>` | Notes covering the same ground — duplicate detection. |
+| `similar <note>` | Notes covering the same ground — duplicate detection. `-n`, `--path-prefix`. |
+| `attrs` | Frontmatter keys and values in use, with counts. `--key k`, `-n`, `--path-prefix`. |
 | `links --to/--from <note>` | Backlinks, or outgoing links with broken ones marked. |
-| `doctor` | Broken links, oversized notes, duplicate titles, ambiguous links, orphans. |
-| `rename <old> <new>` | Move a note and rewrite every link to it. |
+| `doctor` | Broken links, oversized notes, duplicate titles, ambiguous links, orphans, unreadable frontmatter, links in frontmatter. `--path-prefix`. |
+| `rename <old> <new>` | Move a note and rewrite every link to it. A `dir/` destination moves it in there. |
 | `rm <note>` | Delete a note after unlinking every reference. |
+
+`--path-prefix` scopes a command to one directory. On `doctor` it narrows what is reported and not
+what is resolved, so a note linked to only from outside the subtree still counts as linked.
 
 Filters are OR within one key and AND across keys. Every scalar and list-of-scalars frontmatter key
 becomes filterable, so `project: alpha` in a note means `--filter project=alpha` works immediately.
 
 The index never rebuilds itself. `search` warns on stderr when it is stale and answers anyway; the
 agent decides when to re-index, because it knows whether it just finished writing.
+
+## The note model
+
+The instructions `init` installs define a small schema and hold the agent to it, because a
+vocabulary that drifts is a filter that silently returns half an answer.
+
+- `type` is one of note, source, person, project, decision, question, log. `status` is one of seed,
+  developing, stable, superseded, archived, plus open and answered on questions. The agent is told
+  to ask before extending either list rather than inventing a value.
+- `tags` carries the subject axis and nothing else. Type, status, project and priority are
+  properties of their own, so `--filter type=decision --filter project=foo` answers "why is Foo
+  built this way" and `--filter type=question --filter status=open` answers "what is still open".
+- Notes live in `notes/`, dated raw capture in `logs/`, non-markdown in `attachments/`, and the root
+  stays the manual and the tool's own directories. The path carries that one distinction; the
+  frontmatter carries the rest. Folders per `type` or per project would be a second copy of the
+  schema, and it goes wrong the first time an open question is answered.
+- Relations live in the body, either in prose or as labelled lines like `**Supersedes:** [[...]]`.
+  The parser reads links from the body only, so a wikilink in frontmatter creates no backlink and is
+  not rewritten by `rename`; `doctor` now reports it rather than leaving it to rot silently.
+- Inferences are written as inferences and carry `confidence:`. Raw input goes in as `type: log`,
+  `status: seed`, and becomes knowledge only once it is split into typed, titled, linked notes.
+
+The binary holds none of this. It ships no vocabulary, requires no key, and rejects nothing, because
+the ontology is the vault's to choose and lives in AGENTS.md where you can edit it. What the tool
+contributes is the two halves that need to be mechanical:
+
+- **`attrs`** reports the vocabulary the vault actually uses, counted, and has no opinion about what
+  it should be. Drift is visible as a long tail (`project` 40, `projects` 1) and what to do about it
+  stays a judgement for the agent and the user. It also answers the question that made "reuse the
+  existing tags" hard to follow before: an agent can now ask the vault what it calls things instead
+  of guessing from search hits.
+- **`doctor`** reports only facts about what this tool can do with a note. Two of them are about
+  frontmatter: a `---` block whose YAML did not parse (the note indexes and searches normally but
+  has no attributes, so every `--filter` silently skips it) and a `[[wikilink]]` written into a
+  property (not an edge, no backlink, and `rename` will not rewrite it). Neither says anything about
+  which keys a note ought to carry.
 
 ## Design
 

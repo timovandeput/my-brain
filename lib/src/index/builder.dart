@@ -28,6 +28,11 @@ class IndexableDoc {
   /// Approximate body word count, used to flag oversized notes.
   final int wordCount;
 
+  /// Bitfield of the `docFlag*` constants in `format.dart`: findings about the
+  /// note that only the parser can see, carried into the index so `doctor` can
+  /// report them without re-reading every file.
+  final int flags;
+
   final int mtimeMs;
   final int size;
 
@@ -51,6 +56,7 @@ class IndexableDoc {
     required this.size,
     required this.terms,
     required this.attributes,
+    this.flags = 0,
   });
 }
 
@@ -157,6 +163,7 @@ class IndexWriter {
       docRecsWriter.writeVarint(doc.wordCount);
       docRecsWriter.writeVarint(doc.mtimeMs);
       docRecsWriter.writeVarint(doc.size);
+      docRecsWriter.writeVarint(doc.flags);
     }
     final docRecsBytes = docRecsWriter.takeBytes();
 
@@ -487,6 +494,10 @@ class IndexBuilder {
         ...note.markdownLinks,
       ];
 
+      final flags =
+          (note.frontmatter.malformed ? docFlagFrontmatterMalformed : 0) |
+              (note.frontmatter.hasWikiLink ? docFlagFrontmatterLinks : 0);
+
       docs.add(IndexableDoc(
         path: file.path,
         title: note.title,
@@ -498,6 +509,7 @@ class IndexBuilder {
         size: file.size,
         terms: terms,
         attributes: attributes,
+        flags: flags,
       ));
 
       done++;

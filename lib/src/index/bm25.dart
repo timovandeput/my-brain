@@ -65,12 +65,7 @@ class Searcher {
     // pathPrefix is the one O(N) path in this method - it needs every
     // document's path, so it is opt-in and only paid for when supplied.
     if (!alwaysEmpty && query.pathPrefix != null) {
-      final prefix = query.pathPrefix!;
-      final all = await reader.allDocs();
-      final prefixSet = <int>{
-        for (final d in all)
-          if (d.path.startsWith(prefix)) d.docId,
-      };
+      final prefixSet = await reader.docIdsUnder(query.pathPrefix!);
       allowed = allowed == null ? prefixSet : allowed.intersection(prefixSet);
       if (allowed.isEmpty) alwaysEmpty = true;
     }
@@ -147,7 +142,11 @@ class Searcher {
   /// Notes most similar to [doc], for duplicate detection: the document's own
   /// highest-weight terms are used as the query, with the document itself
   /// removed from the results.
-  Future<List<SearchHit>> similarTo(DocRecord doc, {int limit = 10}) async {
+  Future<List<SearchHit>> similarTo(
+    DocRecord doc, {
+    int limit = 10,
+    String? pathPrefix,
+  }) async {
     final file = File(p.join(config.vaultRoot, doc.path));
     if (!file.existsSync()) return const [];
     final source = await file.readAsString();
@@ -190,7 +189,11 @@ class Searcher {
     final queryTerms = scored.take(20).map((e) => e.key).toList();
     if (queryTerms.isEmpty) return const [];
 
-    final hits = await search(SearchQuery(terms: queryTerms, limit: limit + 1));
+    final hits = await search(SearchQuery(
+      terms: queryTerms,
+      limit: limit + 1,
+      pathPrefix: pathPrefix,
+    ));
     return hits.where((h) => h.doc.path != doc.path).take(limit).toList();
   }
 }

@@ -406,6 +406,7 @@ class IndexReader {
       final wordCount = cursor.readVarint();
       final mtimeMs = cursor.readVarint();
       final size = cursor.readVarint();
+      final flags = cursor.readVarint();
       return DocRecord(
         docId: docId,
         path: path,
@@ -418,6 +419,8 @@ class IndexReader {
         wordCount: wordCount,
         mtimeMs: mtimeMs,
         size: size,
+        frontmatterMalformed: flags & docFlagFrontmatterMalformed != 0,
+        frontmatterLinks: flags & docFlagFrontmatterLinks != 0,
       );
     }, 'doc record');
   }
@@ -464,6 +467,18 @@ class IndexReader {
     );
   }
 
+  /// Document ids whose path starts with [prefix].
+  ///
+  /// Linear over the record region because it needs every path, so it is only
+  /// for commands scoping to a directory, and only when one was asked for.
+  Future<Set<int>> docIdsUnder(String prefix) async {
+    final all = await allDocs();
+    return <int>{
+      for (final d in all)
+        if (d.path.startsWith(prefix)) d.docId,
+    };
+  }
+
   /// Document ids carrying frontmatter `key: value`, ascending. Null when the
   /// pair was never indexed, which is different from an empty match.
   ///
@@ -482,14 +497,21 @@ class IndexReader {
     return entry.docIds;
   }
 
-  /// Distinct values indexed for [key], for `--filter` discoverability.
+  /// Every indexed key/value pair with the number of notes carrying it: the
+  /// vault's frontmatter vocabulary as it actually stands.
   ///
-  /// Linear over the attribute region: only used for discoverability, not on
-  /// the search path.
-  Future<List<String>> attributeValues(String key) async {
+  /// One linear pass over the attribute region, reading the entry headers and
+  /// skipping every doc-id payload, so the cost is in the number of distinct
+  /// values rather than in the size of the vault. Entries come back in the
+  /// dictionary's own order, which is `key=value` by UTF-8 byte order.
+  ///
+  /// With [restrictTo], counts cover only those documents and a pair carried
+  /// by none of them is dropped entirely. The payloads are decoded rather
+  /// than skipped, which costs one varint per posting - still one pass over
+  /// the region already in memory, rather than a seek per distinct value.
+  Future<List<AttrCount>> attributeCensus({Set<int>? restrictTo}) async {
     _ensureOpen();
     if (_header.attrCount == 0) return const [];
-    final prefix = '${key.trim().toLowerCase()}=';
     final start = _header.attrEntriesOffset;
     final end = _fileLength;
     if (start < 0 || end < start || end > _fileLength) {
@@ -502,18 +524,49 @@ class IndexReader {
     final buf = await _readExact(_raf, end - start, 'attribute entries');
     return _decodeChecked(() {
       final cursor = ByteCursor(buf);
-      final values = <String>[];
+      final entries = <AttrCount>[];
       for (var i = 0; i < _header.attrCount; i++) {
         final composite = cursor.readString();
-        cursor.readVarint(); // docFreq: part of the layout, unused here.
+        final docFreq = cursor.readVarint();
         final payloadLen = cursor.readVarint();
-        cursor.offset += payloadLen;
-        if (composite.startsWith(prefix)) {
-          values.add(composite.substring(prefix.length));
+        var count = docFreq;
+        if (restrictTo == null) {
+          cursor.offset += payloadLen;
+        } else {
+          final end = cursor.offset + payloadLen;
+          count = 0;
+          var docId = -1;
+          for (var j = 0; j < docFreq; j++) {
+            docId += cursor.readVarint();
+            if (restrictTo.contains(docId)) count++;
+          }
+          cursor.offset = end;
         }
+        // Split on the first `=`, the same way the writer composed it and the
+        // CLI splits `--filter key=value`.
+        final eq = composite.indexOf('=');
+        if (eq < 0) continue;
+        if (count == 0) continue;
+        entries.add(AttrCount(
+          composite.substring(0, eq),
+          composite.substring(eq + 1),
+          count,
+        ));
       }
-      return values;
+      return entries;
     }, 'attribute entries');
+  }
+
+  /// Distinct values indexed for [key], for `--filter` discoverability.
+  ///
+  /// Linear over the attribute region: only used for discoverability, not on
+  /// the search path.
+  Future<List<String>> attributeValues(String key) async {
+    final wanted = key.trim().toLowerCase();
+    return [
+      for (final entry in await attributeCensus())
+        if (entry.key == wanted) entry.value,
+    ];
   }
 
   Future<void> close() async {

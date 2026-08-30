@@ -74,6 +74,7 @@ class InitCommand extends Command<int> {
           for (final c in plan.changes)
             {'path': c.path, 'kind': c.kind.name},
         ],
+        'directories': plan.missingDirectories,
       }, () {});
       if (check) return plan.isUpToDate ? 0 : 1;
       if (!assumeYes) {
@@ -99,6 +100,9 @@ class InitCommand extends Command<int> {
     out.line('');
 
     if (check) {
+      for (final dir in plan.missingDirectories) {
+        out.line('  ${'create'.padRight(9)} $dir/');
+      }
       for (final change in plan.pending) {
         out.line('  ${change.kind.name.padRight(9)} ${change.path}');
       }
@@ -108,6 +112,27 @@ class InitCommand extends Command<int> {
       out.line('');
       out.line('Run `my-brain init` to apply.');
       return 1;
+    }
+
+    // The content directories go first: the file diffs below refer to them,
+    // and a vault with nowhere to put a note is the thing this fixes.
+    if (plan.missingDirectories.isNotEmpty) {
+      final dirs =
+          plan.missingDirectories.map((String d) => '$d/').join(', ');
+      out.line('Create $dirs:');
+      out.line('');
+      out.line(_indent(
+        'Notes and attachments live here, so the vault root stays the '
+        "agent's\ninstructions and the tool's own directories.",
+      ));
+      out.line('');
+      if (assumeYes || out.confirm('  Create $dirs?')) {
+        installer.applyDirectories(plan.missingDirectories);
+        out.line('  created.');
+      } else {
+        out.line('  skipped.');
+      }
+      out.line('');
     }
 
     var applied = 0;
@@ -159,6 +184,7 @@ class InitCommand extends Command<int> {
   }
 
   void _applyAll(VaultInstaller installer, InstallPlan plan, Output out) {
+    installer.applyDirectories(plan.missingDirectories);
     for (final change in plan.pending) {
       installer.applyChange(change);
     }

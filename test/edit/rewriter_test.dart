@@ -113,6 +113,32 @@ void main() {
       expect(plan.to, 'notes/moved.md');
     });
 
+    test('a trailing slash moves the note into that directory', () async {
+      final v = await _vault(dir, {
+        'target.md': '# Target\n',
+        'ref.md': 'See [[target]].\n',
+      });
+
+      final plan =
+          LinkRewriter(v.config, v.docs).planRename('target.md', 'notes/');
+      expect(plan.to, 'notes/target.md');
+      // The migration property: a bare-name link resolves by filename, so
+      // moving a flat vault into notes/ rewrites no prose at all.
+      expect(plan.edits, isEmpty);
+    });
+
+    test('an existing directory as the destination moves the note into it',
+        () async {
+      final v = await _vault(dir, {
+        'notes/target.md': '# Target\n',
+        'archive/keep.md': '# Keep\n',
+      });
+
+      final plan = LinkRewriter(v.config, v.docs)
+          .planRename('notes/target.md', 'archive');
+      expect(plan.to, 'archive/target.md');
+    });
+
     test('offsets survive frontmatter of any length', () async {
       // The parser reports offsets relative to the body; the file on disk
       // still has its frontmatter. A missing shift corrupts the splice.

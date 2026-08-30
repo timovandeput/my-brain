@@ -55,6 +55,32 @@ void main() {
       expect(source.substring(fm.bodyOffset), 'Body text.');
     });
 
+    test('hasWikiLink catches a link in a scalar value', () {
+      const source = '---\ntitle: X\nproject: "[[Project Foo]]"\n---\nBody.';
+      expect(parseFrontmatter(source).hasWikiLink, isTrue);
+    });
+
+    test('hasWikiLink catches a link in a list item', () {
+      const source = '---\nrelated:\n  - "[[Project Foo]]"\n---\nBody.';
+      expect(parseFrontmatter(source).hasWikiLink, isTrue);
+    });
+
+    test('hasWikiLink catches a link in a block that failed to parse', () {
+      const source = '---\ntitle: [unterminated\nup: "[[Foo]]"\n---\nBody.';
+      final fm = parseFrontmatter(source);
+      expect(fm.malformed, isTrue);
+      expect(fm.hasWikiLink, isTrue);
+    });
+
+    test('a link in the body is not a frontmatter link', () {
+      const source = '---\ntitle: X\n---\nBody linking to [[Project Foo]].';
+      expect(parseFrontmatter(source).hasWikiLink, isFalse);
+    });
+
+    test('no frontmatter means no frontmatter link', () {
+      expect(parseFrontmatter('Body with [[Foo]].').hasWikiLink, isFalse);
+    });
+
     test('malformed YAML never costs us the body', () {
       const source = '---\ntitle: [unterminated\n---\nThe body must survive.';
       final fm = parseFrontmatter(source);

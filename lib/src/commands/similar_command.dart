@@ -12,11 +12,14 @@ class SimilarCommand extends Command<int> {
   @override
   final String description = 'Finds notes similar to a given note.';
   @override
-  final String invocation = 'my-brain similar <note>';
+  final String invocation = 'my-brain similar <note> [--path-prefix <dir>]';
 
   SimilarCommand() {
-    argParser.addOption('limit',
-        abbr: 'n', defaultsTo: '10', help: 'Maximum number of hits.');
+    argParser
+      ..addOption('limit',
+          abbr: 'n', defaultsTo: '10', help: 'Maximum number of hits.')
+      ..addOption('path-prefix',
+          help: 'Restrict results to a vault-relative path prefix.');
   }
 
   @override
@@ -50,7 +53,11 @@ class SimilarCommand extends Command<int> {
 
       final reader = await ctx.openIndex();
       final searcher = Searcher(reader, ctx.config);
-      final rawHits = await searcher.similarTo(doc, limit: limit);
+      final rawHits = await searcher.similarTo(
+        doc,
+        limit: limit,
+        pathPrefix: argResults!['path-prefix'] as String?,
+      );
       final hits = await attachSnippets(ctx, rawHits, enabled: true);
 
       output.emit(
