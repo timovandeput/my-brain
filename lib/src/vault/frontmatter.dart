@@ -22,11 +22,11 @@ class Frontmatter {
   /// True when the frontmatter block contains `[[`.
   ///
   /// Reported because the link extractor only ever looks at the body: a
-  /// wikilink written into frontmatter is not an edge in the link graph, is
-  /// invisible to `links` and `doctor`, and survives no `rename` of its
-  /// target. Detected on the raw block text rather than on parsed values, so
-  /// it is caught in a plain scalar, in a list item, and in a block that
-  /// failed to parse alike.
+  /// wikilink written into frontmatter is not an edge in the link graph, so it
+  /// is invisible to `links`, produces no backlink, and survives no `rename`
+  /// of its target. `doctor` reports it for exactly that reason. Detected on
+  /// the raw block text rather than on parsed values, so it is caught in a
+  /// plain scalar, in a list item, and in a block that failed to parse alike.
   final bool hasWikiLink;
 
   const Frontmatter({

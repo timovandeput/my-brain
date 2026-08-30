@@ -49,8 +49,8 @@ analyzer configuration must run at index time and query time or terms will never
 one `const Analyzer()` used on both paths for that reason.
 
 **`index/`** — `format.dart` is the normative on-disk layout of `.brain/index.bin` and its header
-doc comment is the spec; keep it in sync with any layout change and bump `indexFormatVersion` (and
-the trailing byte of `indexMagic` for a breaking change). `builder.dart` writes it via the
+doc comment is the spec; keep it in sync with any layout change and bump `indexFormatVersion`,
+which is the only thing gating compatibility (`indexMagic` never moves). `builder.dart` writes it via the
 `IndexableDoc` seam, which is the only thing `IndexWriter` sees, so the writer never depends on the
 markdown parser. `reader.dart` is region-based and seek-addressed: a query reads the header, the
 small fixed tables, then only its own terms' postings and the records of the hits. Do not introduce

@@ -52,7 +52,10 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-/// File signature. The trailing byte moves with breaking layout changes.
+/// File signature, fixed for the life of the format. Compatibility is gated by
+/// [indexFormatVersion] alone: a magic that moved with every breaking change
+/// would turn a stale index into "not a my-brain index file" instead of a
+/// message naming the rebuild.
 final Uint8List indexMagic = Uint8List.fromList(ascii.encode('MYBRAIN\x01'));
 
 /// Bumped whenever the layout changes in a way that invalidates old files.
@@ -63,8 +66,8 @@ const int indexFormatVersion = 3;
 const int docFlagFrontmatterMalformed = 1 << 0;
 
 /// The note's frontmatter block contains a `[[wikilink]]`. Links are read from
-/// the body only, so that one is not an edge: no backlink, no `doctor` check,
-/// and `rename` will not rewrite it.
+/// the body only, so that one is not an edge: no backlink, no broken-link
+/// check, and `rename` will not rewrite it. `doctor` reports the flag.
 const int docFlagFrontmatterLinks = 1 << 1;
 
 /// Size of the fixed header, padded for future fields.
