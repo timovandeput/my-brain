@@ -87,7 +87,14 @@ chmod +x "$INSTALL_DIR/my-brain"
 
 echo "installed $("$INSTALL_DIR/my-brain" version) to $INSTALL_DIR/my-brain"
 
-if ! command -v my-brain >/dev/null 2>&1; then
+# Asking only whether *a* my-brain is on the PATH is not enough. An older copy
+# in an earlier directory would answer yes, and the user would walk away
+# believing they had updated while still running the old binary, which is a
+# worse outcome than a missing PATH entry because nothing ever tells them.
+# -ef compares device and inode, so it sees through symlinks and relative paths.
+resolved="$(command -v my-brain 2>/dev/null || true)"
+
+if [ -z "$resolved" ]; then
   cat <<EOF
 
 $INSTALL_DIR is not on your PATH. Add this to your shell profile:
@@ -97,5 +104,14 @@ $INSTALL_DIR is not on your PATH. Add this to your shell profile:
 Until then, \`my-brain init\` still works when run by its full path — it records
 the absolute path of the binary in the vault's AGENTS.md, so the agent can call
 it either way.
+EOF
+elif [ ! "$resolved" -ef "$INSTALL_DIR/my-brain" ]; then
+  cat <<EOF
+
+Warning: \`my-brain\` on your PATH is $resolved, which is not the copy just
+installed. Until you remove that one or put $INSTALL_DIR ahead of it in PATH,
+typing \`my-brain\` keeps running the old binary:
+
+  export PATH="$INSTALL_DIR:\$PATH"
 EOF
 fi
