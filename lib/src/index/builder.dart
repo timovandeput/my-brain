@@ -111,8 +111,7 @@ class IndexWriter {
   ) {
     final n = docs.length;
     final docLens = List<int>.generate(n, (i) => docs[i].terms.length);
-    final avgDocLen =
-        n == 0 ? 0.0 : docLens.fold<int>(0, (a, b) => a + b) / n;
+    final avgDocLen = n == 0 ? 0.0 : docLens.fold<int>(0, (a, b) => a + b) / n;
 
     // Accumulate weighted term frequency per doc, and per-term postings in
     // docId-ascending order (guaranteed since we iterate docs in order).
@@ -141,8 +140,7 @@ class IndexWriter {
       });
     }
 
-    final sortedTerms = termPostings.keys.toList()
-      ..sort(compareTermBytes);
+    final sortedTerms = termPostings.keys.toList()..sort(compareTermBytes);
     final sortedAttrKeys = attrDocIds.keys.toList()..sort(compareTermBytes);
 
     // --- doc records (no forward references) ---

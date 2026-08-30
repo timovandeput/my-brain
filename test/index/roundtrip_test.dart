@@ -52,7 +52,6 @@ void main() {
     });
   });
 
-
   late Directory tempDir;
   late BrainConfig config;
 
@@ -167,7 +166,8 @@ void main() {
     expect(reader.docLength(0), 4);
   });
 
-  test('round-trips doc records, lengths, postings, docFrequency and '
+  test(
+      'round-trips doc records, lengths, postings, docFrequency and '
       'attributes at scale (binary search exercised at depth)', () async {
     const n = 300;
     final docs = List<IndexableDoc>.generate(n, makeDoc);
@@ -241,7 +241,8 @@ void main() {
     expect(statusValues, ['draft']);
     final projectValues = await reader.attributeValues('project');
     expect(projectValues, hasLength(n));
-    expect(projectValues.toSet(), List<String>.generate(n, (i) => 'brain$i').toSet());
+    expect(projectValues.toSet(),
+        List<String>.generate(n, (i) => 'brain$i').toSet());
 
     // Attribute keys are case-insensitive on lookup (stored lowercased).
     final draftUpper = await reader.attributeDocs('Status', 'Draft');
@@ -359,7 +360,8 @@ void main() {
       // which never reads that region eagerly. It can only be caught by the
       // bounds checks in the on-demand reads themselves - so this checks
       // that a later read of the region notices, not `open`.
-      File(config.indexPath).writeAsBytesSync(bytes.sublist(0, bytes.length - 3));
+      File(config.indexPath)
+          .writeAsBytesSync(bytes.sublist(0, bytes.length - 3));
       final reader = await IndexReader.open(config.indexPath);
       addTearDown(reader.close);
       // 'status=draft' is the alphabetically last attribute entry in this
@@ -412,8 +414,7 @@ void main() {
       await writeAndExpectFormatException(corrupted);
     }, timeout: const Timeout(Duration(seconds: 10)));
 
-    test('a header with an absurd docCount is rejected the same way',
-        () async {
+    test('a header with an absurd docCount is rejected the same way', () async {
       final bytes = await realIndexBytes();
       final header = IndexHeader.fromBytes(
         Uint8List.sublistView(bytes, 0, indexHeaderSize),
@@ -442,7 +443,8 @@ void main() {
       await writeAndExpectFormatException(corrupted);
     });
 
-    test('VaultContext.openIndex-style Error widening: a directly '
+    test(
+        'VaultContext.openIndex-style Error widening: a directly '
         'constructed reader never throws a bare Error for a truncated file',
         () async {
       final bytes = await realIndexBytes();
@@ -458,13 +460,13 @@ void main() {
     });
   });
 
-  group('IndexBuilder.build skips unreadable files instead of aborting',
-      () {
+  group('IndexBuilder.build skips unreadable files instead of aborting', () {
     test('a non-UTF-8 file is skipped and reported, the rest still index',
         () async {
       File(p.join(tempDir.path, 'good.md'))
         ..createSync(recursive: true)
-        ..writeAsStringSync('---\nstatus: draft\n---\n\n# Good\n\nfine body.\n');
+        ..writeAsStringSync(
+            '---\nstatus: draft\n---\n\n# Good\n\nfine body.\n');
       // Invalid UTF-8 byte sequence - not decodable as text.
       File(p.join(tempDir.path, 'bad.md'))
         ..createSync(recursive: true)
@@ -621,8 +623,7 @@ void main() {
       expect(await reader.attributeValues('nope'), isEmpty);
     });
 
-    test('an index with no attributes at all yields an empty census',
-        () async {
+    test('an index with no attributes at all yields an empty census', () async {
       final reader = await buildAndOpen([
         IndexableDoc(
           path: 'a.md',

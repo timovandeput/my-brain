@@ -210,7 +210,6 @@ double bm25TermScore({
   required double b,
 }) {
   final idf = math.log(1 + (docCount - docFreq + 0.5) / (docFreq + 0.5));
-  final lengthNorm =
-      avgDocLen <= 0 ? 1.0 : (1 - b + b * docLength / avgDocLen);
+  final lengthNorm = avgDocLen <= 0 ? 1.0 : (1 - b + b * docLength / avgDocLen);
   return idf * (tf * (k1 + 1)) / (tf + k1 * lengthNorm);
 }

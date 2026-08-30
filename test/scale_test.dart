@@ -30,12 +30,28 @@ void main() {
     config = BrainConfig(vaultRoot: dir.path);
 
     const topics = [
-      'postgres', 'kubernetes', 'attention', 'dart', 'retrieval', 'habits',
-      'pricing', 'testing', 'latency', 'caching', 'onboarding', 'refactoring',
+      'postgres',
+      'kubernetes',
+      'attention',
+      'dart',
+      'retrieval',
+      'habits',
+      'pricing',
+      'testing',
+      'latency',
+      'caching',
+      'onboarding',
+      'refactoring',
     ];
     const nouns = [
-      'throughput', 'tail latency', 'cognitive load', 'index size',
-      'write amplification', 'churn', 'recall', 'cycle time',
+      'throughput',
+      'tail latency',
+      'cognitive load',
+      'index size',
+      'write amplification',
+      'churn',
+      'recall',
+      'cycle time',
     ];
 
     for (var i = 0; i < noteCount; i++) {
@@ -75,8 +91,7 @@ void main() {
     expect(manifest.files, hasLength(noteCount + 1));
 
     final watch = Stopwatch()..start();
-    final stats =
-        await IndexBuilder(config, const Analyzer()).build(manifest);
+    final stats = await IndexBuilder(config, const Analyzer()).build(manifest);
     watch.stop();
 
     expect(stats.docCount, noteCount + 1);
@@ -120,7 +135,8 @@ void main() {
     // would show up.
     final watch = Stopwatch()..start();
     final hits = await searcher.search(
-      SearchQuery(terms: const Analyzer().analyze('postgres under load'), limit: 10),
+      SearchQuery(
+          terms: const Analyzer().analyze('postgres under load'), limit: 10),
     );
     watch.stop();
 
@@ -135,7 +151,9 @@ void main() {
 
     final hits = await searcher.search(SearchQuery(
       terms: const Analyzer().analyze('latency'),
-      filters: const {'project': ['p3']},
+      filters: const {
+        'project': ['p3']
+      },
       limit: 20,
     ));
 

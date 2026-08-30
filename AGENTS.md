@@ -20,6 +20,7 @@ dart test test/index/bm25_test.dart           # one file
 dart test test/index/bm25_test.dart -n "idf"  # one test by name substring
 dart test test/vault                          # one directory
 dart test -P scale                            # adds the 5,000-note scale suite (tens of seconds)
+dart format .                                 # what CI gates on, alongside analyze
 dart analyze --fatal-infos                    # what CI gates on
 dart run tool/gen_templates.dart              # regenerate templates.g.dart from assets/templates/
 ./tool/build.sh                               # gen templates + analyze + compile to build/my-brain
@@ -30,9 +31,14 @@ dart run tool/gen_templates.dart              # regenerate templates.g.dart from
 `dart compile exe` cannot cross-compile, so every platform needs its own runner. Two workflows:
 
 - `.github/workflows/ci.yml` runs on pull requests and pushes to `main`. `lint` regenerates
-  `templates.g.dart` and fails if that changes a tracked file, then `analyze --fatal-infos`; `test`
-  runs `dart test` and `dart test -P scale`; `build` compiles and smoke-tests the binary on all four
-  release targets, so a change that breaks the release build fails on the pull request.
+  `templates.g.dart` and fails if that changes a tracked file, then checks `dart format` and
+  `analyze --fatal-infos`; `test` runs `dart test` and `dart test -P scale`; `build` compiles and
+  smoke-tests the binary on all four release targets, so a change that breaks the release build
+  fails on the pull request.
+  `gen_templates.dart` formats the file it writes, because the first two of those gates contradict
+  each other otherwise: one wants formatted source, the other wants the generator's exact output.
+  The formatter follows the package's language version (`environment.sdk` in `pubspec.yaml`), not
+  the SDK on the runner, so its output does not move under CI when a new Dart ships.
 - `.github/workflows/release.yml` runs on a `v*` tag. It first checks the tag matches
   `myBrainVersion` in `lib/src/cli/runner_version.dart` — bump that in the same commit as the tag —
   then repeats the full test suite, builds macos-arm64, macos-x64, linux-x64 and windows-x64, and

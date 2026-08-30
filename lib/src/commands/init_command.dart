@@ -71,8 +71,7 @@ class InitCommand extends Command<int> {
         'upToDate': plan.isUpToDate,
         'skillLink': plan.skillLink.name,
         'changes': [
-          for (final c in plan.changes)
-            {'path': c.path, 'kind': c.kind.name},
+          for (final c in plan.changes) {'path': c.path, 'kind': c.kind.name},
         ],
         'directories': plan.missingDirectories,
       }, () {});
@@ -117,8 +116,7 @@ class InitCommand extends Command<int> {
     // The content directories go first: the file diffs below refer to them,
     // and a vault with nowhere to put a note is the thing this fixes.
     if (plan.missingDirectories.isNotEmpty) {
-      final dirs =
-          plan.missingDirectories.map((String d) => '$d/').join(', ');
+      final dirs = plan.missingDirectories.map((String d) => '$d/').join(', ');
       out.line('Create $dirs:');
       out.line('');
       out.line(_indent(
@@ -158,10 +156,10 @@ class InitCommand extends Command<int> {
 
     // The skill link is only useful once the skill files exist, so it goes
     // last and is skipped when the user declined to write them.
-    final linkResult = Directory(p.join(vaultRoot, '.agents', 'skills'))
-            .existsSync()
-        ? installer.applySkillLink()
-        : SkillLinkKind.unchanged;
+    final linkResult =
+        Directory(p.join(vaultRoot, '.agents', 'skills')).existsSync()
+            ? installer.applySkillLink()
+            : SkillLinkKind.unchanged;
 
     switch (linkResult) {
       case SkillLinkKind.symlink:

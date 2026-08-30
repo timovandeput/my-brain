@@ -23,6 +23,8 @@ jobs:
       # failure here, rather than into a binary that ships stale templates.
       - name: Check generated templates are in sync
         run: git diff --exit-code lib/src/setup/templates.g.dart
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze --fatal-infos
 
   test:

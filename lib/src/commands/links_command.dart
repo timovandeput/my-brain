@@ -169,8 +169,8 @@ class LinksCommand extends Command<int> {
       () {
         output.line('broken links (${entries.length}):');
         for (final e in entries) {
-          output
-              .line('  ${e['target']}  <- ${(e['referrers']! as List).join(', ')}');
+          output.line(
+              '  ${e['target']}  <- ${(e['referrers']! as List).join(', ')}');
         }
       },
     );

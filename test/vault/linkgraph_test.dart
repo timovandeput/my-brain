@@ -72,8 +72,7 @@ void main() {
       expect(resolver.resolve('target'), same(byStem));
     });
 
-    test('an empty target (same-file anchor) resolves to null, not broken',
-        () {
+    test('an empty target (same-file anchor) resolves to null, not broken', () {
       final a = doc(docId: 1, path: 'a.md');
       final resolver = LinkResolver([a]);
       expect(resolver.resolve(''), isNull);
@@ -108,8 +107,7 @@ void main() {
       expect(resolver.isAmbiguous('target'), isFalse);
     });
 
-    test('isAmbiguous does not depend on resolve having been called first',
-        () {
+    test('isAmbiguous does not depend on resolve having been called first', () {
       final a = doc(docId: 1, path: 'x/target.md');
       final b = doc(docId: 2, path: 'y/target.md');
       final resolver = LinkResolver([a, b]);

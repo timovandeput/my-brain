@@ -218,9 +218,7 @@ class VaultInstaller {
     if (type == FileSystemEntityType.link) {
       final target = Link(claudeSkills).targetSync();
       final resolved = p.normalize(
-        p.isAbsolute(target)
-            ? target
-            : p.join(p.dirname(claudeSkills), target),
+        p.isAbsolute(target) ? target : p.join(p.dirname(claudeSkills), target),
       );
       if (resolved == p.normalize(agentsSkills)) return SkillLinkKind.unchanged;
       Link(claudeSkills).deleteSync();

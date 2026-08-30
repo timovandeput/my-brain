@@ -69,8 +69,7 @@ class IndexCommand extends Command<int> {
               'indexed ${stats.docCount} docs in ${stats.elapsed.inMilliseconds}ms');
         }
         if (skipped.isNotEmpty) {
-          output.line(
-              'skipped ${skipped.length} unreadable file(s):');
+          output.line('skipped ${skipped.length} unreadable file(s):');
           for (final s in skipped) {
             output.line('  ${s.path}: ${s.reason}');
           }
