@@ -153,7 +153,9 @@ class AttrsCommand extends Command<int> {
                 : 'no notes carry "$key"');
             return;
           }
-          output.line('$noteCount notes indexed:');
+          output.line(prefix == null
+              ? '$noteCount notes indexed:'
+              : '$noteCount notes under $prefix:');
           for (final s in summaries) {
             final shown = shownValues(s.values, limit);
             final hidden = s.values.length - shown.length;
