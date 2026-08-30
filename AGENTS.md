@@ -15,14 +15,15 @@ mechanics of working in the code.
 ## Commands
 
 ```sh
-dart test                              # everything except the scale suite
-dart test test/bm25_test.dart          # one file
-dart test test/bm25_test.dart -n "idf" # one test by name substring
-dart test -P scale                     # adds the 5,000-note scale suite (tens of seconds)
-dart analyze --fatal-infos             # what CI gates on
-dart run tool/gen_templates.dart       # regenerate templates.g.dart from assets/templates/
-./tool/build.sh                        # gen templates + analyze + compile to build/my-brain
-./tool/install.sh                      # build, then symlink build/my-brain into ~/.local/bin
+dart test                                     # everything except the scale suite
+dart test test/index/bm25_test.dart           # one file
+dart test test/index/bm25_test.dart -n "idf"  # one test by name substring
+dart test test/vault                          # one directory
+dart test -P scale                            # adds the 5,000-note scale suite (tens of seconds)
+dart analyze --fatal-infos                    # what CI gates on
+dart run tool/gen_templates.dart              # regenerate templates.g.dart from assets/templates/
+./tool/build.sh                               # gen templates + analyze + compile to build/my-brain
+./tool/install.sh                             # build, then symlink build/my-brain into ~/.local/bin
 ```
 
 `dart compile exe` cannot cross-compile; other platforms come from the matrix in
@@ -99,6 +100,9 @@ is written once and never overwritten (`ChangeKind.keep`).
 
 ## Conventions
 
+- `test/` mirrors `lib/src/`, so the tests for a file live at the same relative path
+  (`lib/src/vault/markdown.dart` -> `test/vault/markdown_test.dart`). `test/scale_test.dart` stays
+  at the top level because it exercises the whole scan-index-search path, not one unit.
 - Tests import internals directly (`package:my_brain/src/...`), not just the `lib/my_brain.dart`
   export surface. Integration-flavoured tests build a real vault under `Directory.systemTemp`.
 - A slow test is tagged `@Tags(['scale'])` and skipped by default via `dart_test.yaml`.
