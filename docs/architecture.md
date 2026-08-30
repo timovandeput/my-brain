@@ -390,8 +390,10 @@ A stale read is a slightly incomplete answer, and the agent can judge whether th
 rename is permanent damage: a note the index has not seen keeps its link to a file that no longer
 exists, and nothing will ever go back and fix it. So reads warn and writes refuse.
 
-`doctor` always exits 0. It is a report, not a gate, and an agent should never have to branch on
-its exit code to find out whether it ran.
+`doctor` exits 0 whenever it runs, whatever it finds. It is a report, not a gate, so a vault full of
+broken links is not an error condition and an agent never has to branch on the exit code to read the
+findings. A non-zero exit from `doctor` means it could not run at all, no vault or no readable
+index, not that it disliked what it saw.
 
 ## Mutating notes
 
@@ -488,7 +490,7 @@ result.
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Success. Also `doctor`, always, whatever it found. |
+| 0 | Success. Also `doctor` whenever it ran, whatever it found. |
 | 1 | Note not found, ambiguous, or a mutation refused. |
 | 2 | Usage error. |
 | 3 | No vault, no readable index, or a stale index blocking a mutation. |
