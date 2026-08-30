@@ -73,7 +73,8 @@ class AttrsCommand extends Command<int> {
   final String description =
       'Frontmatter keys and values in use, with note counts.';
   @override
-  final String invocation = 'my-brain attrs [--key <key>] [-n <count>]';
+  final String invocation =
+      'my-brain attrs [--key <key>] [-n <count>] [--path-prefix <dir>]';
 
   AttrsCommand() {
     argParser
@@ -82,7 +83,9 @@ class AttrsCommand extends Command<int> {
       ..addOption('limit',
           abbr: 'n',
           defaultsTo: '$defaultAttrValueLimit',
-          help: 'Values shown per key (all of them with --key).');
+          help: 'Values shown per key (all of them with --key).')
+      ..addOption('path-prefix',
+          help: 'Count only notes under a vault-relative path prefix.');
   }
 
   @override
@@ -115,14 +118,19 @@ class AttrsCommand extends Command<int> {
       }
 
       final reader = await ctx.openIndex();
-      final census = await reader.attributeCensus();
+      final prefix = args['path-prefix'] as String?;
+      final scoped =
+          prefix == null ? null : await reader.docIdsUnder(prefix);
+      final census = await reader.attributeCensus(restrictTo: scoped);
+      final noteCount = scoped?.length ?? reader.docCount;
       final summaries = summarizeAttributes(census)
           .where((AttrKeySummary s) => key == null || s.key == key)
           .toList();
 
       output.emit(
         {
-          'docCount': reader.docCount,
+          'docCount': noteCount,
+          if (prefix != null) 'pathPrefix': prefix,
           'stale': staleness.stale,
           'keys': [
             for (final s in summaries)
@@ -145,7 +153,7 @@ class AttrsCommand extends Command<int> {
                 : 'no notes carry "$key"');
             return;
           }
-          output.line('${reader.docCount} notes indexed:');
+          output.line('$noteCount notes indexed:');
           for (final s in summaries) {
             final shown = shownValues(s.values, limit);
             final hidden = s.values.length - shown.length;

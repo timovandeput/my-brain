@@ -36,6 +36,10 @@ form to use when you are going to act on the result.
 Useful `search` flags: `-n 20` for more hits, `--tag x`, `--filter key=value` (repeat for OR on one
 key, AND across keys), `--not key=value`, `--path-prefix dir/`.
 
+`similar`, `attrs` and `doctor` take `--path-prefix dir/` as well, for working through one directory
+at a time. On `doctor` it narrows what is reported, not what is resolved: a note linked to only from
+outside the subtree is still not an orphan.
+
 ## Answering a question
 
 1. **Search first, always.** Run two or three differently worded queries, not one. Ranking is

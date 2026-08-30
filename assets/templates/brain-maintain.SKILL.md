@@ -13,10 +13,11 @@ It edits the user's notes, so it runs only when they ask for it.
 
 ## Scope it first
 
-Ask the user what to cover if they have not said: the whole vault, or a subtree
-(`--path-prefix projects/`), or one topic (`--tag x`). On a large vault, a full pass produces more
-changes than anyone wants to review at once. Offer to work through the report in batches and stop
-when they have had enough.
+Ask the user what to cover if they have not said: the whole vault, or a subtree, or one topic
+(`--tag x`). `doctor`, `attrs`, `search` and `similar` all take `--path-prefix notes/projects/`, so a
+subtree pass is the same procedure with that flag on every command. On a large vault, a full pass
+produces more changes than anyone wants to review at once. Offer to work through the report in
+batches and stop when they have had enough.
 
 ## Get the report
 

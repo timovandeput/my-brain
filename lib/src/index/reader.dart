@@ -467,6 +467,18 @@ class IndexReader {
     );
   }
 
+  /// Document ids whose path starts with [prefix].
+  ///
+  /// Linear over the record region because it needs every path, so it is only
+  /// for commands scoping to a directory, and only when one was asked for.
+  Future<Set<int>> docIdsUnder(String prefix) async {
+    final all = await allDocs();
+    return <int>{
+      for (final d in all)
+        if (d.path.startsWith(prefix)) d.docId,
+    };
+  }
+
   /// Document ids carrying frontmatter `key: value`, ascending. Null when the
   /// pair was never indexed, which is different from an empty match.
   ///
@@ -492,7 +504,12 @@ class IndexReader {
   /// skipping every doc-id payload, so the cost is in the number of distinct
   /// values rather than in the size of the vault. Entries come back in the
   /// dictionary's own order, which is `key=value` by UTF-8 byte order.
-  Future<List<AttrCount>> attributeCensus() async {
+  ///
+  /// With [restrictTo], counts cover only those documents and a pair carried
+  /// by none of them is dropped entirely. The payloads are decoded rather
+  /// than skipped, which costs one varint per posting - still one pass over
+  /// the region already in memory, rather than a seek per distinct value.
+  Future<List<AttrCount>> attributeCensus({Set<int>? restrictTo}) async {
     _ensureOpen();
     if (_header.attrCount == 0) return const [];
     final start = _header.attrEntriesOffset;
@@ -512,15 +529,28 @@ class IndexReader {
         final composite = cursor.readString();
         final docFreq = cursor.readVarint();
         final payloadLen = cursor.readVarint();
-        cursor.offset += payloadLen;
+        var count = docFreq;
+        if (restrictTo == null) {
+          cursor.offset += payloadLen;
+        } else {
+          final end = cursor.offset + payloadLen;
+          count = 0;
+          var docId = -1;
+          for (var j = 0; j < docFreq; j++) {
+            docId += cursor.readVarint();
+            if (restrictTo.contains(docId)) count++;
+          }
+          cursor.offset = end;
+        }
         // Split on the first `=`, the same way the writer composed it and the
         // CLI splits `--filter key=value`.
         final eq = composite.indexOf('=');
         if (eq < 0) continue;
+        if (count == 0) continue;
         entries.add(AttrCount(
           composite.substring(0, eq),
           composite.substring(eq + 1),
-          docFreq,
+          count,
         ));
       }
       return entries;

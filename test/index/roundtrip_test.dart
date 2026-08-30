@@ -640,6 +640,42 @@ void main() {
       addTearDown(reader.close);
       expect(await reader.attributeCensus(), isEmpty);
     });
+
+    test('restrictTo counts one subtree and drops what only lives outside it',
+        () async {
+      IndexableDoc doc(String path, String type) => IndexableDoc(
+            path: path,
+            title: path,
+            aliases: const [],
+            headings: const [],
+            outLinks: const [],
+            wordCount: 10,
+            mtimeMs: 1,
+            size: 1,
+            terms: const [],
+            attributes: {
+              'type': [type],
+            },
+          );
+      final reader = await buildAndOpen([
+        doc('logs/2026-08-30.md', 'log'),
+        doc('notes/a.md', 'note'),
+        doc('notes/b.md', 'note'),
+      ]);
+      addTearDown(reader.close);
+
+      final scoped = await reader.docIdsUnder('notes/');
+      final census = await reader.attributeCensus(restrictTo: scoped);
+      expect(
+        {for (final e in census) '${e.key}=${e.value}': e.docCount},
+        // type=log is carried only by the note outside the subtree, so it is
+        // gone rather than reported with a count of zero.
+        {'type=note': 2},
+      );
+
+      // The unrestricted census still sees the whole vault.
+      expect((await reader.attributeCensus()).length, 2);
+    });
   });
 
   group('attributeDocs trims key and value like the write-side flatten does',

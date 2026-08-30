@@ -2,7 +2,134 @@ import 'package:args/command_runner.dart';
 
 import '../cli/output.dart';
 import '../cli/vault_context.dart';
+import '../model.dart';
 import '../vault/linkgraph.dart';
+
+/// Every finding `doctor` can make, as the JSON body the command emits.
+///
+/// Kept a plain function over [DocRecord]s so the report can be tested without
+/// a vault on disk, which leaves the command below as argument handling and
+/// rendering.
+///
+/// [pathPrefix] narrows what is *reported*, never what is *resolved*: the link
+/// graph is always the whole vault, because a link into the subtree from
+/// outside it still decides whether a note is an orphan, and a title still
+/// collides with one filed elsewhere.
+Map<String, Object?> buildDoctorReport({
+  required List<DocRecord> docs,
+  required int splitThresholdWords,
+  required bool stale,
+  String? pathPrefix,
+}) {
+  final resolver = LinkResolver(docs);
+  bool inScope(String path) =>
+      pathPrefix == null || path.startsWith(pathPrefix);
+
+  // Broken links, listed under the notes that carry them: a referrer outside
+  // the subtree is somebody else's problem this run.
+  final brokenMap = resolver.brokenLinks();
+  final brokenTargets = brokenMap.keys.toList()..sort();
+  final brokenLinks = <Map<String, Object?>>[];
+  for (final target in brokenTargets) {
+    final referrers = (brokenMap[target]!.toList()
+          ..sort((a, b) => a.path.compareTo(b.path)))
+        .map((d) => d.path)
+        .where(inScope)
+        .toList();
+    if (referrers.isEmpty) continue;
+    brokenLinks.add({'target': target, 'referrers': referrers});
+  }
+
+  // Oversized notes.
+  final oversized = docs
+      .where((d) => inScope(d.path) && d.wordCount > splitThresholdWords)
+      .map((d) => <String, Object?>{
+            'path': d.path,
+            'wordCount': d.wordCount,
+          })
+      .toList()
+    ..sort(
+        (a, b) => (b['wordCount']! as int).compareTo(a['wordCount']! as int));
+
+  // Duplicate/colliding titles and aliases: names that resolve to more than
+  // one path, case-insensitively.
+  final byName = <String, Set<String>>{};
+  for (final d in docs) {
+    byName.putIfAbsent(d.title.toLowerCase(), () => <String>{}).add(d.path);
+    for (final a in d.aliases) {
+      byName.putIfAbsent(a.toLowerCase(), () => <String>{}).add(d.path);
+    }
+  }
+  final duplicateTitles = [
+    for (final entry in byName.entries)
+      // A collision is reported when one of its notes is in scope, but every
+      // colliding path is shown: the note it collides with is the point,
+      // wherever that one happens to sit.
+      if (entry.value.length > 1 && entry.value.any(inScope))
+        <String, Object?>{
+          'name': entry.key,
+          'paths': entry.value.toList()..sort(),
+        },
+  ]..sort((a, b) => (a['name']! as String).compareTo(b['name']! as String));
+
+  // Ambiguous link targets: distinct outgoing targets that LinkResolver could
+  // have resolved to more than one document.
+  final allTargets = <String>{
+    for (final d in docs) ...d.outLinks,
+  };
+  final ambiguousTargets = allTargets.where(resolver.isAmbiguous).toList()
+    ..sort();
+  final ambiguousLinks = <Map<String, Object?>>[];
+  for (final target in ambiguousTargets) {
+    final referrers = (docs.where((d) => d.outLinks.contains(target)).toList()
+          ..sort((a, b) => a.path.compareTo(b.path)))
+        .map((d) => d.path)
+        .where(inScope)
+        .toList();
+    if (referrers.isEmpty) continue;
+    ambiguousLinks.add({'target': target, 'referrers': referrers});
+  }
+
+  // Frontmatter that opened a `---` block the YAML parser rejected. The note
+  // still indexes and still searches; it just silently has no attributes, so
+  // every --filter passes it by. Nothing else reports it.
+  final malformedFrontmatter = docs
+      .where((d) => d.frontmatterMalformed && inScope(d.path))
+      .map((d) => d.path)
+      .toList()
+    ..sort();
+
+  // Wikilinks written into frontmatter. Links are read from the body only, so
+  // these are not edges: no backlink, no broken-link check above, and
+  // `rename` will not rewrite them when their target moves.
+  final frontmatterLinks = docs
+      .where((d) => d.frontmatterLinks && inScope(d.path))
+      .map((d) => d.path)
+      .toList()
+    ..sort();
+
+  // Orphans: no inbound and no outbound links.
+  final orphans = docs
+      .where((d) =>
+          inScope(d.path) &&
+          d.outLinks.isEmpty &&
+          resolver.backlinksTo(d).isEmpty)
+      .map((d) => d.path)
+      .toList()
+    ..sort();
+
+  return {
+    'stale': stale,
+    if (pathPrefix != null) 'pathPrefix': pathPrefix,
+    'brokenLinks': brokenLinks,
+    'oversized': oversized,
+    'duplicateTitles': duplicateTitles,
+    'ambiguousLinks': ambiguousLinks,
+    'orphans': orphans,
+    'malformedFrontmatter': malformedFrontmatter,
+    'frontmatterLinks': frontmatterLinks,
+  };
+}
 
 /// Reports vault health in one pass: broken links, oversized notes,
 /// duplicate/colliding titles or aliases, ambiguous link targets, orphans,
@@ -21,6 +148,13 @@ class DoctorCommand extends Command<int> {
   final String description =
       'Reports vault health: broken links, oversized notes, duplicate '
       'titles, ambiguous links, orphans, and unreadable frontmatter.';
+  @override
+  final String invocation = 'my-brain doctor [--path-prefix <dir>]';
+
+  DoctorCommand() {
+    argParser.addOption('path-prefix',
+        help: 'Report only notes under a vault-relative path prefix.');
+  }
 
   @override
   Future<int> run() async {
@@ -45,104 +179,32 @@ class DoctorCommand extends Command<int> {
       }
 
       final reader = await ctx.openIndex();
-      final docs = await reader.allDocs();
-      final resolver = LinkResolver(docs);
+      final prefix = argResults!['path-prefix'] as String?;
+      final report = buildDoctorReport(
+        docs: await reader.allDocs(),
+        splitThresholdWords: ctx.config.splitThresholdWords,
+        stale: staleness.stale,
+        pathPrefix: prefix,
+      );
 
-      // Broken links.
-      final brokenMap = resolver.brokenLinks();
-      final brokenTargets = brokenMap.keys.toList()..sort();
-      final brokenLinks = [
-        for (final t in brokenTargets)
-          <String, Object?>{
-            'target': t,
-            'referrers': (brokenMap[t]!
-                  ..sort((a, b) => a.path.compareTo(b.path)))
-                .map((d) => d.path)
-                .toList(),
-          },
-      ];
-
-      // Oversized notes.
-      final oversized = docs
-          .where((d) => d.wordCount > ctx.config.splitThresholdWords)
-          .map((d) => <String, Object?>{
-                'path': d.path,
-                'wordCount': d.wordCount,
-              })
-          .toList()
-        ..sort((a, b) =>
-            (b['wordCount']! as int).compareTo(a['wordCount']! as int));
-
-      // Duplicate/colliding titles and aliases: names that resolve to more
-      // than one path, case-insensitively.
-      final byName = <String, Set<String>>{};
-      for (final d in docs) {
-        byName.putIfAbsent(d.title.toLowerCase(), () => <String>{}).add(d.path);
-        for (final a in d.aliases) {
-          byName.putIfAbsent(a.toLowerCase(), () => <String>{}).add(d.path);
-        }
-      }
-      final duplicateTitles = [
-        for (final entry in byName.entries)
-          if (entry.value.length > 1)
-            <String, Object?>{
-              'name': entry.key,
-              'paths': entry.value.toList()..sort(),
-            },
-      ]..sort((a, b) => (a['name']! as String).compareTo(b['name']! as String));
-
-      // Ambiguous link targets: distinct outgoing targets that LinkResolver
-      // could have resolved to more than one document.
-      final allTargets = <String>{
-        for (final d in docs) ...d.outLinks,
-      };
-      final ambiguousTargets = allTargets.where(resolver.isAmbiguous).toList()
-        ..sort();
-      final ambiguousLinks = [
-        for (final t in ambiguousTargets)
-          <String, Object?>{
-            'target': t,
-            'referrers': (docs.where((d) => d.outLinks.contains(t)).toList()
-                  ..sort((a, b) => a.path.compareTo(b.path)))
-                .map((d) => d.path)
-                .toList(),
-          },
-      ];
-
-      // Frontmatter that opened a `---` block the YAML parser rejected. The
-      // note still indexes and still searches; it just silently has no
-      // attributes, so every --filter passes it by. Nothing else reports it.
-      final malformedFrontmatter =
-          docs.where((d) => d.frontmatterMalformed).map((d) => d.path).toList()
-            ..sort();
-
-      // Wikilinks written into frontmatter. Links are read from the body
-      // only, so these are not edges: no backlink, no broken-link check
-      // above, and `rename` will not rewrite them when their target moves.
-      final frontmatterLinks =
-          docs.where((d) => d.frontmatterLinks).map((d) => d.path).toList()
-            ..sort();
-
-      // Orphans: no inbound and no outbound links.
-      final orphans = docs
-          .where((d) => d.outLinks.isEmpty && resolver.backlinksTo(d).isEmpty)
-          .map((d) => d.path)
-          .toList()
-        ..sort();
+      List<Map<String, Object?>> entries(String key) =>
+          (report[key]! as List).cast<Map<String, Object?>>();
+      List<String> paths(String key) => (report[key]! as List).cast<String>();
 
       output.emit(
-        {
-          'stale': staleness.stale,
-          'brokenLinks': brokenLinks,
-          'oversized': oversized,
-          'duplicateTitles': duplicateTitles,
-          'ambiguousLinks': ambiguousLinks,
-          'orphans': orphans,
-          'malformedFrontmatter': malformedFrontmatter,
-          'frontmatterLinks': frontmatterLinks,
-        },
+        report,
         () {
-          output.line('doctor report:');
+          final brokenLinks = entries('brokenLinks');
+          final oversized = entries('oversized');
+          final duplicateTitles = entries('duplicateTitles');
+          final ambiguousLinks = entries('ambiguousLinks');
+          final orphans = paths('orphans');
+          final malformedFrontmatter = paths('malformedFrontmatter');
+          final frontmatterLinks = paths('frontmatterLinks');
+
+          output.line(prefix == null
+              ? 'doctor report:'
+              : 'doctor report for $prefix:');
           output.line('  broken links: ${brokenLinks.length}');
           for (final b in brokenLinks) {
             output.line(

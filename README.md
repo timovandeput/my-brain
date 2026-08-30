@@ -66,12 +66,15 @@ Every command takes `--json`, which is the form the agent uses.
 | `index [--stats]` | Rebuild the index. |
 | `status` | Doc count, index size, and whether it still matches the files on disk. |
 | `search <words>` | Ranked lookup. `-n`, `--tag`, `--filter k=v`, `--not k=v`, `--path-prefix`. |
-| `similar <note>` | Notes covering the same ground — duplicate detection. |
-| `attrs` | Frontmatter keys and values in use, with counts. `--key k`, `-n`. |
+| `similar <note>` | Notes covering the same ground — duplicate detection. `-n`, `--path-prefix`. |
+| `attrs` | Frontmatter keys and values in use, with counts. `--key k`, `-n`, `--path-prefix`. |
 | `links --to/--from <note>` | Backlinks, or outgoing links with broken ones marked. |
-| `doctor` | Broken links, oversized notes, duplicate titles, ambiguous links, orphans, unreadable frontmatter, links in frontmatter. |
+| `doctor` | Broken links, oversized notes, duplicate titles, ambiguous links, orphans, unreadable frontmatter, links in frontmatter. `--path-prefix`. |
 | `rename <old> <new>` | Move a note and rewrite every link to it. |
 | `rm <note>` | Delete a note after unlinking every reference. |
+
+`--path-prefix` scopes a command to one directory. On `doctor` it narrows what is reported and not
+what is resolved, so a note linked to only from outside the subtree still counts as linked.
 
 Filters are OR within one key and AND across keys. Every scalar and list-of-scalars frontmatter key
 becomes filterable, so `project: alpha` in a note means `--filter project=alpha` works immediately.
