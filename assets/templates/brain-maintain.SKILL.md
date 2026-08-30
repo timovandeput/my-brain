@@ -28,10 +28,32 @@ my-brain doctor --json
 That gives you seven lists: broken links, oversized notes, duplicate or colliding titles, ambiguous
 link targets, orphans, notes whose frontmatter did not parse, and notes with a wikilink written into
 frontmatter. `doctor` reports only what the tool can establish as fact; whether the vault's own
-vocabulary is being kept is pass 1's job. Work the passes in order, since each one changes the input
+vocabulary is being kept is pass 2's job. Work the passes in order, since each one changes the input
 to the next.
 
-## 1. Schema and vocabulary drift
+## 1. Notes in the wrong place
+
+The vault root is for AGENTS.md, CLAUDE.md and the tool's own dot-directories. Notes go under
+`notes/`, dated raw capture under `logs/`. Notes written into the root bury the instructions, and a
+vault set up before this layout existed has all of them there.
+
+```
+find . -maxdepth 1 -name '*.md' ! -name AGENTS.md ! -name CLAUDE.md
+```
+
+Show the user the list and offer to move it. Each file moves with `my-brain rename`, never `mv`:
+
+```
+my-brain rename "<file>" "notes/<file>"
+```
+
+Links written as a bare `[[Name]]` resolve by filename and so survive the move untouched; links
+written as a path are rewritten by `rename` as it goes. Re-index afterwards.
+
+Do not go reorganising the vault beyond that. A subject folder someone made deliberately is theirs,
+and moving notes between existing directories changes nothing about how they retrieve.
+
+## 2. Schema and vocabulary drift
 
 `doctor` will not judge this for you, and search cannot find it either: a note filed under a value
 nobody queries is invisible by definition. `attrs` reports the vocabulary the vault actually uses,
@@ -71,7 +93,7 @@ having no properties is a choice rather than a defect. If the user wants every n
 with `grep -rL --include='*.md' --exclude-dir='.*' '^type:' .` and work through the list with them.
 Do not go stamping `type:` onto notes nobody asked you to touch.
 
-## 2. Broken links
+## 3. Broken links
 
 Each broken link is a target that nothing in the vault answers. Search for what it was probably
 aiming at:
@@ -91,7 +113,7 @@ Three outcomes, and you need to tell them apart:
 - **A note that was deleted by hand**, leaving references behind. Either restore the link to a
   successor note, or replace the link with its display text so the prose still reads.
 
-## 3. Duplicate and colliding titles
+## 4. Duplicate and colliding titles
 
 For each pair, read both. Then:
 
@@ -109,7 +131,7 @@ statements, where each came from, and your recommendation with the reasoning. Do
 version from the note you happened to keep. Where one note supersedes the other rather than
 duplicating it, keep both: mark the old one `status: superseded` and link it forward.
 
-## 4. Raw material that never became knowledge
+## 5. Raw material that never became knowledge
 
 ```
 my-brain attrs --key status
@@ -125,7 +147,7 @@ classify step: pull out the entities, decisions and questions, write them as the
 them back to the raw note, and leave the original in place as the source. Do not process the whole
 backlog unasked; this is the most expensive work in the pass.
 
-## 5. Missing cross-references
+## 6. Missing cross-references
 
 For notes that came up repeatedly in the searches above, check `my-brain links --from` and
 `links --to`. Where two notes are clearly about related things and neither points at the other, add
@@ -136,7 +158,7 @@ Orphans from the `doctor` report are the acute case: a note nothing links to and
 is effectively invisible. Find its neighbours by search and connect it, or ask the user whether it
 should still exist.
 
-## 6. Oversized notes, last
+## 7. Oversized notes, last
 
 Splitting is last because merging and relinking change which notes are oversized, and splitting
 first would multiply the work.

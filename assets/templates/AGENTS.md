@@ -74,6 +74,29 @@ Both ways of getting this wrong hurt retrieval:
   thing worth keeping. If a note makes no sense without opening its neighbour, it should have stayed
   in the neighbour.
 
+## Where files go
+
+```
+notes/         every note you write
+logs/          dated raw capture: meetings, transcripts, journal entries
+attachments/   images, PDFs, anything that is not markdown
+```
+
+The vault root holds AGENTS.md, CLAUDE.md and the tool's own dot-directories, and nothing else. Notes
+written into the root bury the instructions you are reading, so new notes go under `notes/` and dated
+dumps under `logs/`.
+
+The path carries that one distinction. The frontmatter carries everything else, so do not build
+folders for `type`, `status`, `project` or subject. `--filter type=decision --filter project=foo`
+already answers those, and a folder tree that repeats them is a second copy of the schema that goes
+wrong the first time an open question is answered or a seed grows into a note. Subfolders under
+`notes/` are for a subject that has genuinely outgrown one directory; let them emerge from notes that
+already exist rather than laying out an empty hierarchy first.
+
+Use `my-brain rename` to move a note between directories, never `mv`. A bare `[[Deep Work]]` link
+resolves by filename, so moving its target rewrites nothing, but a link written as a path does need
+rewriting and only `rename` will do it.
+
 ## Frontmatter: the retrieval model
 
 Every scalar and list-of-scalars key becomes a `--filter`, so the frontmatter is what turns a pile of

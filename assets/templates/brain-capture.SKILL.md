@@ -111,10 +111,11 @@ operation, decided before you touch a file:
 Updating an existing note is the common case and should be your default. A vault of hundreds of
 one-line notes retrieves badly.
 
-Put new notes wherever the vault's existing structure suggests. If the vault has no structure yet,
-start flat and let folders emerge when a subject clearly earns one. Do not build an elaborate
-hierarchy in an empty vault; the index does the finding, and folders that exist for their own sake
-become a filing chore forever after.
+New notes go in `notes/`, and raw material you are parking goes in `logs/`. Never write a note into
+the vault root: that is where the instructions live, and a root full of notes buries them. Follow a
+subfolder under `notes/` when the vault already has one for this subject, but do not create one, and
+do not file by `type`, `status` or project. The frontmatter already answers those and the index does
+the finding. AGENTS.md has the layout.
 
 ## 6. Write it
 

@@ -37,6 +37,9 @@ my-brain init
 ```
 AGENTS.md                                the agent's operating manual
 CLAUDE.md                                one line: @AGENTS.md
+notes/                                   every note
+logs/                                    dated raw capture
+attachments/                             anything that is not markdown
 .agents/skills/brain-capture/SKILL.md    manual-only: add information
 .agents/skills/brain-maintain/SKILL.md   manual-only: vault hygiene pass
 .claude/skills -> ../.agents/skills      so Claude Code finds the same files
@@ -87,6 +90,10 @@ vocabulary that drifts is a filter that silently returns half an answer.
 - `tags` carries the subject axis and nothing else. Type, status, project and priority are
   properties of their own, so `--filter type=decision --filter project=foo` answers "why is Foo
   built this way" and `--filter type=question --filter status=open` answers "what is still open".
+- Notes live in `notes/`, dated raw capture in `logs/`, non-markdown in `attachments/`, and the root
+  stays the manual and the tool's own directories. The path carries that one distinction; the
+  frontmatter carries the rest. Folders per `type` or per project would be a second copy of the
+  schema, and it goes wrong the first time an open question is answered.
 - Relations live in the body, either in prose or as labelled lines like `**Supersedes:** [[...]]`.
   The parser reads links from the body only, so a wikilink in frontmatter creates no backlink and is
   not rewritten by `rename`; `doctor` now reports it rather than leaving it to rot silently.

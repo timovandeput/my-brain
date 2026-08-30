@@ -76,7 +76,9 @@ arguments; it throws `CliError` which commands catch and translate to an exit co
 - **The binary ships no vocabulary.** It defines no frontmatter keys, requires none, and rejects
   nothing; `attrs` reports what the vault actually uses and has no opinion. The note schema (`type`,
   `status`, tag discipline) lives in `assets/templates/AGENTS.md`, so changing it is a template edit,
-  not a Dart change.
+  not a Dart change. The same goes for the vault layout: `init` creates `notes/`, `logs/` and
+  `attachments/`, but no command cares where a note sits, so where things go is taught by the
+  templates rather than enforced by the code.
 
 ### Output and exit codes
 
