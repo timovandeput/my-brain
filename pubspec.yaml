@@ -1,6 +1,7 @@
 name: my_brain
 description: Index and search a vault of markdown notes so an AI agent can use it as a second brain.
 version: 0.1.0
+license: MIT
 publish_to: none
 
 environment:
