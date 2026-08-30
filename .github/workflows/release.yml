@@ -10,7 +10,7 @@ jobs:
   verify-tag:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Tag matches myBrainVersion
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -23,7 +23,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dart-lang/setup-dart@v1
       - run: dart pub get
       - run: dart run tool/gen_templates.dart
@@ -50,7 +50,7 @@ jobs:
             artifact: my-brain.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dart-lang/setup-dart@v1
       - run: dart pub get
       - run: dart run tool/gen_templates.dart
@@ -70,7 +70,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: Compress-Archive -Path build/${{ matrix.artifact }} -DestinationPath my-brain-${{ matrix.target }}.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: my-brain-${{ matrix.target }}
           path: my-brain-${{ matrix.target }}.*
@@ -82,7 +82,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: dist
           merge-multiple: true
@@ -93,7 +93,7 @@ jobs:
           cd dist
           sha256sum my-brain-*.tar.gz my-brain-*.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: dist/*
