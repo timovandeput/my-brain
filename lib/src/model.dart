@@ -98,6 +98,16 @@ class DocRecord {
   /// Approximate word count of the body, used to flag oversized notes.
   final int wordCount;
 
+  /// True when the note opened a `---` block that did not parse as a YAML
+  /// mapping. Such a note indexes and searches normally but has no
+  /// attributes at all, so every `--filter` silently passes it by; `doctor`
+  /// reports it because nothing else would.
+  final bool frontmatterMalformed;
+
+  /// True when the frontmatter block contains a `[[wikilink]]`, which the
+  /// link graph never sees. See [Frontmatter.hasWikiLink].
+  final bool frontmatterLinks;
+
   final int mtimeMs;
   final int size;
 
@@ -113,7 +123,26 @@ class DocRecord {
     required this.wordCount,
     required this.mtimeMs,
     required this.size,
+    this.frontmatterMalformed = false,
+    this.frontmatterLinks = false,
   });
+}
+
+/// One value of one frontmatter key, with the number of notes carrying it.
+///
+/// The unit of the attribute index and of `my-brain attrs`: the vault's own
+/// vocabulary, counted, with no opinion about what it ought to be.
+class AttrCount {
+  /// Frontmatter key, lowercased.
+  final String key;
+
+  /// The value as indexed: lowercased and trimmed.
+  final String value;
+
+  /// How many notes carry this key/value pair.
+  final int docCount;
+
+  const AttrCount(this.key, this.value, this.docCount);
 }
 
 /// One entry of a term's postings list.

@@ -5,15 +5,22 @@ import '../cli/vault_context.dart';
 import '../vault/linkgraph.dart';
 
 /// Reports vault health in one pass: broken links, oversized notes,
-/// duplicate/colliding titles or aliases, ambiguous link targets, and
-/// orphans. Always exits 0 - this is a report, not a gate.
+/// duplicate/colliding titles or aliases, ambiguous link targets, orphans,
+/// and two frontmatter findings that only the parser can see. Always exits
+/// 0 - this is a report, not a gate.
+///
+/// Everything here is a fact about what this tool can and cannot do with a
+/// note: a link it cannot resolve, a header it could not parse, a note too
+/// long to retrieve precisely. It deliberately says nothing about which keys
+/// or values a note ought to carry; that belongs to the vault's own
+/// conventions in AGENTS.md, not to the binary.
 class DoctorCommand extends Command<int> {
   @override
   final String name = 'doctor';
   @override
   final String description =
       'Reports vault health: broken links, oversized notes, duplicate '
-      'titles, ambiguous links, and orphans.';
+      'titles, ambiguous links, orphans, and unreadable frontmatter.';
 
   @override
   Future<int> run() async {
@@ -102,6 +109,20 @@ class DoctorCommand extends Command<int> {
           },
       ];
 
+      // Frontmatter that opened a `---` block the YAML parser rejected. The
+      // note still indexes and still searches; it just silently has no
+      // attributes, so every --filter passes it by. Nothing else reports it.
+      final malformedFrontmatter =
+          docs.where((d) => d.frontmatterMalformed).map((d) => d.path).toList()
+            ..sort();
+
+      // Wikilinks written into frontmatter. Links are read from the body
+      // only, so these are not edges: no backlink, no broken-link check
+      // above, and `rename` will not rewrite them when their target moves.
+      final frontmatterLinks =
+          docs.where((d) => d.frontmatterLinks).map((d) => d.path).toList()
+            ..sort();
+
       // Orphans: no inbound and no outbound links.
       final orphans = docs
           .where((d) => d.outLinks.isEmpty && resolver.backlinksTo(d).isEmpty)
@@ -117,6 +138,8 @@ class DoctorCommand extends Command<int> {
           'duplicateTitles': duplicateTitles,
           'ambiguousLinks': ambiguousLinks,
           'orphans': orphans,
+          'malformedFrontmatter': malformedFrontmatter,
+          'frontmatterLinks': frontmatterLinks,
         },
         () {
           output.line('doctor report:');
@@ -142,6 +165,15 @@ class DoctorCommand extends Command<int> {
           output.line('  orphans: ${orphans.length}');
           for (final path in orphans) {
             output.line('    $path');
+          }
+          output.line(
+              '  unreadable frontmatter: ${malformedFrontmatter.length}');
+          for (final path in malformedFrontmatter) {
+            output.line('    $path  (no attributes: --filter cannot see it)');
+          }
+          output.line('  links in frontmatter: ${frontmatterLinks.length}');
+          for (final path in frontmatterLinks) {
+            output.line('    $path  (not in the link graph, not renamed)');
           }
         },
       );

@@ -539,6 +539,109 @@ void main() {
     });
   });
 
+  group('frontmatter findings travel with the doc record', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('brain_flags_'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('malformed and frontmatter-link flags survive a build', () async {
+      final vault = BrainConfig(vaultRoot: dir.path);
+      File(p.join(dir.path, 'broken.md')).writeAsStringSync(
+        '---\ntitle: [unterminated\n---\nBody survives.\n',
+      );
+      File(p.join(dir.path, 'fmlink.md')).writeAsStringSync(
+        '---\ntitle: Linked\nrelated:\n  - "[[Other]]"\n---\nBody.\n',
+      );
+      File(p.join(dir.path, 'clean.md')).writeAsStringSync(
+        '---\ntitle: Clean\ntype: note\n---\nBody with [[Other]].\n',
+      );
+
+      final manifest = await VaultScanner(vault).scan();
+      await IndexBuilder(vault, const Analyzer()).build(manifest);
+      final reader = await IndexReader.open(vault.indexPath);
+      addTearDown(reader.close);
+
+      final docs = <String, DocRecord>{
+        for (final d in await reader.allDocs()) d.path: d,
+      };
+
+      expect(docs['broken.md']!.frontmatterMalformed, isTrue);
+      expect(docs['broken.md']!.frontmatterLinks, isFalse);
+
+      expect(docs['fmlink.md']!.frontmatterLinks, isTrue);
+      expect(docs['fmlink.md']!.frontmatterMalformed, isFalse);
+      // The frontmatter link is not an edge: only body links are.
+      expect(docs['fmlink.md']!.outLinks, isEmpty);
+
+      // A link in the body is not a frontmatter finding.
+      expect(docs['clean.md']!.frontmatterLinks, isFalse);
+      expect(docs['clean.md']!.frontmatterMalformed, isFalse);
+      expect(docs['clean.md']!.outLinks, ['Other']);
+    });
+  });
+
+  group('attributeCensus', () {
+    test('counts every key/value pair, sharing one pass with the values API',
+        () async {
+      final docs = [
+        for (var i = 0; i < 3; i++)
+          IndexableDoc(
+            path: 'notes/note-$i.md',
+            title: 'Note $i',
+            aliases: const [],
+            headings: const [],
+            outLinks: const [],
+            wordCount: 10,
+            mtimeMs: 1,
+            size: 1,
+            terms: const [],
+            attributes: {
+              'type': [i == 2 ? 'question' : 'note'],
+              'tags': ['alpha', 'beta'],
+            },
+          ),
+      ];
+      final reader = await buildAndOpen(docs);
+      addTearDown(reader.close);
+
+      final census = await reader.attributeCensus();
+      final counts = {
+        for (final e in census) '${e.key}=${e.value}': e.docCount,
+      };
+      expect(counts, {
+        'tags=alpha': 3,
+        'tags=beta': 3,
+        'type=note': 2,
+        'type=question': 1,
+      });
+
+      // A value containing no `=` is impossible by construction, and the
+      // values API is now a filter over the same pass.
+      expect(await reader.attributeValues('type'), ['note', 'question']);
+      expect(await reader.attributeValues('nope'), isEmpty);
+    });
+
+    test('an index with no attributes at all yields an empty census',
+        () async {
+      final reader = await buildAndOpen([
+        IndexableDoc(
+          path: 'a.md',
+          title: 'A',
+          aliases: const [],
+          headings: const [],
+          outLinks: const [],
+          wordCount: 1,
+          mtimeMs: 1,
+          size: 1,
+          terms: const [],
+          attributes: const {},
+        ),
+      ]);
+      addTearDown(reader.close);
+      expect(await reader.attributeCensus(), isEmpty);
+    });
+  });
+
   group('attributeDocs trims key and value like the write-side flatten does',
       () {
     test('a query with stray whitespace still matches', () async {

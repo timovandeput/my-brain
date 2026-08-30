@@ -19,12 +19,23 @@ class Frontmatter {
   /// True when a block was present but could not be parsed as a YAML mapping.
   final bool malformed;
 
+  /// True when the frontmatter block contains `[[`.
+  ///
+  /// Reported because the link extractor only ever looks at the body: a
+  /// wikilink written into frontmatter is not an edge in the link graph, is
+  /// invisible to `links` and `doctor`, and survives no `rename` of its
+  /// target. Detected on the raw block text rather than on parsed values, so
+  /// it is caught in a plain scalar, in a list item, and in a block that
+  /// failed to parse alike.
+  final bool hasWikiLink;
+
   const Frontmatter({
     required this.data,
     required this.bodyOffset,
     required this.lineCount,
     required this.present,
     required this.malformed,
+    this.hasWikiLink = false,
   });
 
   static const Frontmatter none = Frontmatter(
@@ -187,5 +198,6 @@ Frontmatter parseFrontmatter(String source) {
     lineCount: lineCount,
     present: true,
     malformed: malformed,
+    hasWikiLink: yamlSource.contains('[['),
   );
 }
