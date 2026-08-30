@@ -60,10 +60,23 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
   sha_check() { shasum -a 256 -c --status "$1"; }
 fi
-(cd "$tmp" && grep " $asset\$" SHA256SUMS.txt > expected.txt && sha_check expected.txt) || {
+# awk on the exact filename field, not grep on a pattern: the asset name is
+# full of dots, which grep reads as wildcards, so the line it pulls is not
+# guaranteed to be the line for this file.
+awk -v asset="$asset" '$2 == asset' "$tmp/SHA256SUMS.txt" > "$tmp/expected.txt"
+
+# This emptiness check is load-bearing, not defensive noise: GNU sha256sum
+# exits 0 on a checksum file containing no lines, so an asset missing from
+# SHA256SUMS.txt would otherwise verify as a pass.
+if [ ! -s "$tmp/expected.txt" ]; then
+  echo "my-brain: $asset is not listed in SHA256SUMS.txt; refusing to install" >&2
+  exit 1
+fi
+
+if ! (cd "$tmp" && sha_check expected.txt); then
   echo "my-brain: checksum mismatch for $asset; refusing to install" >&2
   exit 1
-}
+fi
 
 tar -xzf "$tmp/$asset" -C "$tmp"
 mkdir -p "$INSTALL_DIR"
