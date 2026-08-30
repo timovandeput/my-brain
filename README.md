@@ -15,6 +15,8 @@ The split of responsibilities is deliberate:
 `my-brain init` writes the agent's own operating instructions into the vault, so the vault carries
 its manual and stays in step with whatever the binary can currently do.
 
+<a href="https://www.buymeacoffee.com/software101" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me a Coffee" height="41" width="174"></a>
+
 ## Install
 
 ### From a release, on macOS or Linux
