@@ -97,9 +97,10 @@ wrong the first time an open question is answered or a seed grows into a note. S
 `notes/` are for a subject that has genuinely outgrown one directory; let them emerge from notes that
 already exist rather than laying out an empty hierarchy first.
 
-Use `my-brain rename` to move a note between directories, never `mv`. A bare `[[Deep Work]]` link
-resolves by filename, so moving its target rewrites nothing, but a link written as a path does need
-rewriting and only `rename` will do it.
+Use `my-brain rename` to move a note between directories, never `mv`; `my-brain rename "<note>"
+notes/` moves it in under its own name. A bare `[[Deep Work]]` link resolves by filename, so moving
+its target rewrites nothing, but a link written as a path does need rewriting and only `rename` will
+do it.
 
 ## Frontmatter: the retrieval model
 

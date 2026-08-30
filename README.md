@@ -70,7 +70,7 @@ Every command takes `--json`, which is the form the agent uses.
 | `attrs` | Frontmatter keys and values in use, with counts. `--key k`, `-n`, `--path-prefix`. |
 | `links --to/--from <note>` | Backlinks, or outgoing links with broken ones marked. |
 | `doctor` | Broken links, oversized notes, duplicate titles, ambiguous links, orphans, unreadable frontmatter, links in frontmatter. `--path-prefix`. |
-| `rename <old> <new>` | Move a note and rewrite every link to it. |
+| `rename <old> <new>` | Move a note and rewrite every link to it. A `dir/` destination moves it in there. |
 | `rm <note>` | Delete a note after unlinking every reference. |
 
 `--path-prefix` scopes a command to one directory. On `doctor` it narrows what is reported and not

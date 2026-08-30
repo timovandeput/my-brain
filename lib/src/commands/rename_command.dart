@@ -5,6 +5,10 @@ import '../cli/vault_context.dart';
 import '../edit/rewriter.dart';
 
 /// Renames a note and rewrites every wikilink that refers to it.
+///
+/// A destination that names a directory - written with a trailing slash, or
+/// one that already exists - moves the note into it under its own filename,
+/// the way `mv` reads the same arguments.
 class RenameCommand extends Command<int> {
   @override
   final String name = 'rename';
@@ -12,7 +16,7 @@ class RenameCommand extends Command<int> {
   final String description =
       'Renames a note and rewrites every link that refers to it.';
   @override
-  final String invocation = 'my-brain rename <old> <new>';
+  final String invocation = 'my-brain rename <old> <new|directory/>';
 
   RenameCommand() {
     argParser

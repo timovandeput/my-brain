@@ -266,14 +266,34 @@ class LinkRewriter {
   /// separators to the vault-relative `/` form, and - when [to] has no
   /// directory component of its own - keeps [from]'s directory, matching how
   /// Obsidian resolves a bare-name rename target.
+  ///
+  /// A destination naming a directory means "move it in there", the way `mv`
+  /// reads it: the note keeps its filename. Without that, `rename note notes/`
+  /// would ask for a file called `notes/.md`.
   String _normalizeDestination(String from, String to) {
     final normalized = p.split(to).join('/');
+    if (_namesDirectory(to, normalized)) {
+      final base = p.basename(from);
+      return normalized.isEmpty || normalized == '/'
+          ? base
+          : '$normalized/$base';
+    }
     final withExtension = normalized.toLowerCase().endsWith('.md')
         ? normalized
         : '$normalized.md';
     if (withExtension.contains('/')) return withExtension;
     final dir = p.dirname(from);
     return dir == '.' ? withExtension : '$dir/$withExtension';
+  }
+
+  /// True when the destination is a directory: written with a trailing
+  /// separator, or already existing in the vault as one.
+  bool _namesDirectory(String to, String normalized) {
+    if (to.endsWith('/') || to.endsWith(p.separator)) return true;
+    if (normalized.isEmpty) return false;
+    return Directory(
+      p.join(config.vaultRoot, p.joinAll(normalized.split('/'))),
+    ).existsSync();
   }
 
   /// Rebuilds a wikilink pointing at [newPath], keeping the original's alias

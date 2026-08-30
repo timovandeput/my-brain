@@ -45,7 +45,7 @@ find . -maxdepth 1 -name '*.md' ! -name AGENTS.md ! -name CLAUDE.md
 Show the user the list and offer to move it. Each file moves with `my-brain rename`, never `mv`:
 
 ```
-my-brain rename "<file>" "notes/<file>"
+my-brain rename "<file>" notes/
 ```
 
 Links written as a bare `[[Name]]` resolve by filename and so survive the move untouched; links
