@@ -213,3 +213,7 @@ index regions and the invocation flows, with diagrams.
 The files `init` writes live in `assets/templates/` as real markdown and are compiled into the
 binary as base64 constants — the executable is self-contained, so it cannot read them from disk.
 Regenerate after editing them.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
