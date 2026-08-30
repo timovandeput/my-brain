@@ -87,12 +87,107 @@ Re-running `init` refreshes the instructions when my-brain gains commands. AGENT
 marker-managed: anything you add outside the `<!-- my-brain:begin -->` block survives.
 `init --check` reports drift without changing anything.
 
-Then start an agent in the vault and talk to it. `/brain-capture` files a thought; asking a question
-retrieves from the notes.
+## Using the vault
 
-## Commands
+Start an agent in the vault root. It reads `AGENTS.md`, which `init` wrote, and that file tells it
+where the binary is, which commands exist, and how the notes are organised. Nothing else needs
+configuring, and the agent does not need to have seen this vault before. Claude Code reads the same
+file through the one-line `CLAUDE.md`.
 
-Every command takes `--json`, which is the form the agent uses.
+### Adding information
+
+Type `/brain-capture`, or say "add this to my brain". Capture is manual on purpose. An agent that
+files a note every time the conversation brushes a topic fills the vault with noise you then have
+to clean up.
+
+What happens next is why capture is a skill rather than a file write. The agent separates what you
+said from what it concluded, and writes the second as an inference carrying `confidence:` or not at
+all. It splits the input by type: a meeting is rarely one note, it is usually a project, a person, a
+decision and an open question, four notes that each answer a different query months later. It
+searches the vault before writing so a fifth note about Foo gets merged into the one that already
+exists. Then it writes the frontmatter, links the notes up, and re-indexes.
+
+Material too long or too messy to process now goes into `logs/` whole, as `type: log`,
+`status: seed`. Raw input parked deliberately is fine. Raw input mistaken for knowledge is not.
+
+If you edit notes yourself, run `my-brain index` afterwards. The index never rebuilds itself.
+
+### Answering questions
+
+Ask the agent a question in plain language. `AGENTS.md` tells it how to answer, and the procedure is
+worth knowing because it explains the answers you get:
+
+1. Search first, with two or three differently worded queries. Ranking is lexical, so if you say
+   "focus" and the vault says "attention", one query finds nothing and another finds everything.
+2. Use filters when the question has a shape. `--filter type=question --filter status=open` is every
+   open question. `--filter type=decision --filter project=foo` is why Foo is built the way it is.
+   Filters narrow, they do not rank, so they answer what words cannot.
+3. Read the top hits, then follow their links one hop. Those links were placed deliberately and
+   encode relationships that word matching cannot see.
+4. Answer from the notes and cite the paths used. If the vault does not have the answer, say so
+   rather than filling the gap from general knowledge, and pass on a note's `confidence: low` rather
+   than laundering it into a fact.
+
+Any agent that follows the `AGENTS.md` convention can do this. The vault carries its own manual, so
+there is no per-agent setup and no prompt to paste.
+
+### Reading the vault in Obsidian
+
+The vault is a folder of plain markdown with `[[wikilinks]]`, so Obsidian opens it as it stands.
+Choose "Open folder as vault" and point it at the vault root. There is nothing to convert and
+nothing to sync, and both can have the vault open at once. The only thing my-brain owns is the
+`.brain/` directory, which Obsidian hides anyway because it starts with a dot.
+
+Exclude the agent's own files from Obsidian's search. Go to Preferences -> Files and Links ->
+Excluded files and add `AGENTS.md` and `CLAUDE.md`. They are the manual, not notes, and because they
+spell out the whole vocabulary they otherwise surface near the top of half your searches. Obsidian
+de-emphasises excluded files rather than deleting them from the index: they drop out of the quick
+switcher, graph view and link suggestions, and fall to the bottom of search results.
+
+If you rename or move a note in Obsidian, Obsidian rewrites the links itself and my-brain's index
+goes stale. Run `my-brain index`, or ask the agent to.
+
+## Backups are yours to arrange
+
+my-brain has no undo, no trash and no version history. `rm` deletes the file, `rename` rewrites
+every referring note in place, and the agent edits notes directly while it captures. Those are
+ordinary filesystem writes and nothing in the tool can take one back. Keeping copies of the vault is
+your responsibility, not the tool's.
+
+Git is the option worth reaching for first. Notes are plain markdown, so the history is readable,
+a diff shows exactly which sentence an agent changed, and you can revert one note without touching
+the rest.
+
+```sh
+cd my-vault
+git init
+my-brain init     # sees the repo and keeps .brain/index.bin out of it
+git add . && git commit -m "vault"
+git remote add origin git@github.com:you/my-vault.git
+git push -u origin main
+```
+
+`init` adds the index to `.gitignore` only when the vault is already a git repository, so run
+`git init` first, or re-run `my-brain init` afterwards. The index is a rebuildable binary and does
+not belong in the history; `my-brain index` regenerates it in seconds on a fresh clone.
+
+Commit and push on whatever rhythm you keep, and make a point of committing before a
+`/brain-maintain` pass or a batch of renames, which touch many files at once. `--dry-run` on
+`rename` and `rm` shows the plan before anything is written, but a commit is what saves you after
+the fact. Use a private repository. A second brain is personal by definition, and a vault pushed to
+a public remote stays readable in the history even after you delete the file.
+
+If git is not for you, copy the vault folder to a cloud storage provider on a schedule you will
+actually keep, and keep dated copies rather than one live mirror. A continuously synced folder
+propagates a deletion as fast as it propagates a note, so it protects you from a dead disk but not
+from a bad edit, unless the provider keeps file version history and you know how to get at it.
+
+## Commands of the executable
+
+These are the subcommands of the `my-brain` binary, the ones an agent runs in a shell. They are a
+different thing from the vault's `/brain-capture` and `/brain-maintain` skills above, which are
+prompts for the agent rather than code. Every command takes `--json`, which is the form the agent
+uses.
 
 | Command | |
 | --- | --- |
@@ -168,6 +263,9 @@ large amount of machinery whose failure mode is a silently wrong index.
 
 Measured on 5,001 notes: 2.5s to build the index, ~130ms for a cold search including process start,
 130ms for a whole-vault `doctor` pass.
+
+`docs/architecture.md` goes through the layers, the on-disk regions and the invocation flows with
+diagrams.
 
 ## Development
 
