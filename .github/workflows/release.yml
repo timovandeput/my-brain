@@ -37,13 +37,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS ships both architectures: macos-latest is Apple silicon,
-          # macos-13 is the last Intel runner GitHub offers.
+          # Apple silicon only: GitHub's Intel macOS runner is on its way out,
+          # so an Intel Mac builds from source with tool/build.sh instead.
           - os: macos-latest
             target: macos-arm64
-            artifact: my-brain
-          - os: macos-13
-            target: macos-x64
             artifact: my-brain
           - os: ubuntu-latest
             target: linux-x64
@@ -57,6 +54,10 @@ jobs:
       - uses: dart-lang/setup-dart@v1
       - run: dart pub get
       - run: dart run tool/gen_templates.dart
+      # dart compile exe will not create the output directory itself.
+      - name: Make output directory
+        shell: bash
+        run: mkdir -p build
       # dart compile exe targets the host only, which is why this is a matrix.
       - run: dart compile exe bin/my_brain.dart -o build/${{ matrix.artifact }}
       - name: Smoke-test the binary

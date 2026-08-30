@@ -27,13 +27,17 @@ case "$(uname -m)" in
   *) echo "my-brain: no prebuilt binary for $(uname -m)" >&2; exit 1 ;;
 esac
 
-# Linux is x64-only in the release matrix; on macOS both architectures ship.
-if [ "$os" = "linux" ] && [ "$arch" != "x64" ]; then
-  echo "my-brain: no prebuilt Linux binary for $(uname -m); build from source with tool/build.sh" >&2
-  exit 1
-fi
-
 target="$os-$arch"
+
+# The release matrix builds macos-arm64 and linux-x64. An Intel Mac is not in
+# it, so say that here rather than letting the download 404.
+case "$target" in
+  macos-arm64 | linux-x64) ;;
+  *)
+    echo "my-brain: no prebuilt binary for $target; build from source with tool/build.sh" >&2
+    exit 1
+    ;;
+esac
 asset="my-brain-$target.tar.gz"
 
 if [ "$VERSION" = "latest" ]; then

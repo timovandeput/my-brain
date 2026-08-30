@@ -31,10 +31,10 @@ update — it replaces whatever is installed. Two environment variables steer it
 - `INSTALL_DIR=/usr/local/bin` installs somewhere else.
 - `MY_BRAIN_VERSION=v0.1.0` pins a release instead of taking the latest.
 
-To do it by hand, take an archive from the [releases page][releases]:
-`my-brain-macos-arm64.tar.gz` for Apple silicon, `my-brain-macos-x64.tar.gz` for Intel Macs, plus
-`my-brain-linux-x64.tar.gz` and `my-brain-windows-x64.zip`. Unpack it and move `my-brain` onto your
-PATH. A browser download is quarantined by macOS and Gatekeeper will refuse to run it, so clear the
+Releases carry `my-brain-macos-arm64.tar.gz`, `my-brain-linux-x64.tar.gz` and
+`my-brain-windows-x64.zip`. An Intel Mac has no prebuilt binary — GitHub's Intel macOS runner is on
+its way out — so build one from source as below. To install by hand, take an archive from the
+[releases page][releases], unpack it and move `my-brain` onto your PATH. A browser download is quarantined by macOS and Gatekeeper will refuse to run it, so clear the
 flag first — the install script uses curl, which does not set it:
 
 ```sh
@@ -52,8 +52,8 @@ chmod +x ./my-brain && mv ./my-brain ~/.local/bin/
 ```
 
 Dart cannot cross-compile, so `dart compile exe` produces a binary for the machine that runs it.
-Binaries for macOS, Linux and Windows come from the CI matrix in
-`.github/workflows/release.yml`, which is also what a tag publishes.
+This is the route for any platform the release matrix in `.github/workflows/release.yml` does not
+cover, an Intel Mac among them.
 
 ## Set up a vault
 
