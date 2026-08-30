@@ -17,7 +17,7 @@ its manual and stays in step with whatever the binary can currently do.
 
 ## Install
 
-### From a release
+### From a release, on macOS or Linux
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/timovandeput/my-brain/main/tool/install-release.sh | bash
@@ -31,11 +31,14 @@ update — it replaces whatever is installed. Two environment variables steer it
 - `INSTALL_DIR=/usr/local/bin` installs somewhere else.
 - `MY_BRAIN_VERSION=v0.1.0` pins a release instead of taking the latest.
 
-Releases carry `my-brain-macos-arm64.tar.gz`, `my-brain-linux-x64.tar.gz` and
-`my-brain-windows-x64.zip`. An Intel Mac has no prebuilt binary — GitHub's Intel macOS runner is on
-its way out — so build one from source as below. To install by hand, take an archive from the
-[releases page][releases], unpack it and move `my-brain` onto your PATH. A browser download is quarantined by macOS and Gatekeeper will refuse to run it, so clear the
-flag first — the install script uses curl, which does not set it:
+The script covers the two platforms it can install onto: Apple silicon Macs and x64 Linux. **On
+Windows**, take `my-brain-windows-x64.zip` from the [releases page][releases], unpack it, and put
+`my-brain.exe` in a directory on your PATH. An **Intel Mac** has no prebuilt binary at all —
+GitHub's Intel macOS runner is on its way out — so build from source as below.
+
+Installing by hand on macOS or Linux works the same way: take the archive, unpack it, move
+`my-brain` onto your PATH. A browser download is quarantined by macOS and Gatekeeper will refuse to
+run it, so clear the flag first — the install script uses curl, which does not set it:
 
 ```sh
 tar -xzf my-brain-macos-arm64.tar.gz
